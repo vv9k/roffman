@@ -208,6 +208,16 @@ impl RoffNode {
         }
     }
 
+    pub fn tagged_paragraph<C>(content: C, tag: RoffText) -> Self
+    where
+        C: IntoIterator<Item = RoffText>,
+    {
+        Self::TaggedParagraph {
+            content: content.into_iter().collect(),
+            tag,
+        }
+    }
+
     pub fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
         match self {
             RoffNode::Paragraph(content) => {
@@ -234,7 +244,19 @@ impl RoffNode {
                 writer.write(ENDL)?;
                 writer.write(COMMA)?;
             }
-            _ => {}
+            RoffNode::TaggedParagraph { content, tag } => {
+                writer.write(TAGGED_PARAGRAPH)?;
+                writer.write(ENDL)?;
+                tag.render(writer)?;
+                writer.write(ENDL)?;
+
+                for text in content {
+                    text.render(writer)?;
+                }
+
+                writer.write(ENDL)?;
+                writer.write(COMMA)?;
+            }
         }
 
         Ok(())
@@ -282,6 +304,13 @@ mod tests {
                     ],
                     Some(4),
                 )],
+            )
+            .section(
+                "test section 3",
+                vec![RoffNode::tagged_paragraph(
+                    vec!["tagged paragraph with some content".roff()],
+                    "paragraph title".roff().bold(),
+                )],
             );
 
         let rendered = roff.to_string().unwrap();
@@ -297,6 +326,12 @@ this is some very \fBspecial\fR text
 .
 .IP "" 4
 \fILorem ipsum\fR dolor sit amet, consectetur adipiscing elit\. Vivamus quis malesuada eros\.
+.
+.SH "test section 3"
+.
+.TP
+\fBparagraph title\fR
+tagged paragraph with some content
 .
 "#,
             rendered
