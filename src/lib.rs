@@ -18,6 +18,8 @@ const TAGGED_PARAGRAPH: &[u8] = b".TP";
 pub enum RoffError {
     #[error("Failed to render roff as string - `{0}`")]
     StringRenderFailed(String),
+    #[error("Failed to render roff - `{0}`")]
+    RenderFailed(#[from] io::Error),
 }
 
 fn escape<T: AsRef<str>>(text: T) -> String {
@@ -78,7 +80,7 @@ impl Roff {
         self
     }
 
-    pub fn render<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+    pub fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
         writer.write(TITLE_HEADER)?;
         writer.write(SPACE)?;
         write_quoted(self.title.as_bytes(), writer)?;
@@ -103,7 +105,7 @@ pub struct Section {
 }
 
 impl Section {
-    pub fn render<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+    pub fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
         writer.write(SECTION_HEADER)?;
         writer.write(SPACE)?;
         write_quoted(self.title.as_bytes(), writer)?;
@@ -154,7 +156,7 @@ impl RoffText {
         self
     }
 
-    pub fn render<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+    pub fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
         let styled = match self.style {
             Style::Bold => {
                 writer.write(BOLD)?;
@@ -206,7 +208,7 @@ impl RoffNode {
         }
     }
 
-    pub fn render<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+    pub fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
         match self {
             RoffNode::Paragraph(content) => {
                 writer.write(PARAGRAPH)?;
@@ -258,7 +260,6 @@ impl Roffable for String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::BufWriter;
 
     #[test]
     fn it_roffs() {
