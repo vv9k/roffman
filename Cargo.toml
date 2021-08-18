@@ -1,0 +1,13 @@
+[package]
+name = "roffman"
+version = "0.1.0"
+descriptioon = "Crate to generate ROFF files used for manual pages."
+edition = "2018"
+authors = ["Wojciech Kępka <wojciech@wkepka.dev>"]
+repository = "https://github.com/vv9k/roffman"
+keywords = ["roff", "man", "groff", "troff"]
+license = "MIT"
+
+
+[dependencies]
+thiserror = "1"
