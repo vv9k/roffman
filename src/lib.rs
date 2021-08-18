@@ -28,23 +28,24 @@ fn escape<T: AsRef<str>>(text: T) -> String {
     text.replace('-', "\\-")
 }
 
-fn write_quoted<W: Write>(content: &[u8], writer: &mut W) -> io::Result<()> {
+fn write_quoted(roff: &RoffText, writer: &mut impl Write) -> Result<(), RoffError> {
     writer.write(QUOTE)?;
-    writer.write(content)?;
-    writer.write(QUOTE).map(|_| ())
+    roff.render(writer)?;
+    writer.write(QUOTE)?;
+    Ok(())
 }
 
 pub struct Roff {
-    title: String,
-    date: Option<String>,
+    title: RoffText,
+    date: Option<RoffText>,
     section: u8,
     sections: Vec<Section>,
 }
 
 impl Roff {
-    pub fn new<T: AsRef<str>>(title: T, section: u8) -> Self {
+    pub fn new<R: Roffable>(title: R, section: u8) -> Self {
         Self {
-            title: escape(title),
+            title: title.roff(),
             date: None,
             section,
             sections: vec![],
@@ -63,33 +64,53 @@ impl Roff {
         .map_err(|e| RoffError::StringRenderFailed(e.to_string()))
     }
 
-    pub fn date<D: Into<String>>(mut self, date: D) -> Self {
-        self.date = Some(date.into());
+    pub fn date<D: Roffable>(mut self, date: D) -> Self {
+        self.date = Some(date.roff());
         self
     }
 
-    pub fn section<T, C>(mut self, title: T, content: C) -> Self
+    pub fn section<I, R>(mut self, title: R, content: I) -> Self
     where
-        T: AsRef<str>,
-        C: IntoIterator<Item = RoffNode>,
+        I: IntoIterator<Item = RoffNode>,
+        R: Roffable,
     {
         self.sections.push(Section {
-            title: escape(title),
+            title: title.roff(),
             nodes: content.into_iter().collect(),
         });
         self
     }
 
-    pub fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
-        writer.write(TITLE_HEADER)?;
+    fn write_title(&self, writer: &mut impl Write) -> Result<(), RoffError> {
         writer.write(SPACE)?;
-        write_quoted(self.title.as_bytes(), writer)?;
-        writer.write(format!(" \"{}\" ", self.section).as_bytes())?;
+        write_quoted(&self.title, writer)
+    }
+
+    fn write_section(&self, writer: &mut impl Write) -> Result<(), RoffError> {
+        writer.write(SPACE)?;
+        write_quoted(&self.section.roff(), writer)
+    }
+
+    fn write_date(&self, writer: &mut impl Write) -> Result<(), RoffError> {
         if let Some(date) = &self.date {
-            write_quoted(date.as_bytes(), writer)?;
+            writer.write(SPACE)?;
+            write_quoted(&date, writer)?;
         }
+        Ok(())
+    }
+
+    fn write_title_header(&self, writer: &mut impl Write) -> Result<(), RoffError> {
+        writer.write(TITLE_HEADER)?;
+        self.write_title(writer)?;
+        self.write_section(writer)?;
+        self.write_date(writer)?;
         writer.write(ENDL)?;
         writer.write(COMMA)?;
+        Ok(())
+    }
+
+    pub fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
+        self.write_title_header(writer)?;
 
         for section in &self.sections {
             section.render(writer)?;
@@ -100,7 +121,7 @@ impl Roff {
 }
 
 pub struct Section {
-    title: String,
+    title: RoffText,
     nodes: Vec<RoffNode>,
 }
 
@@ -108,9 +129,8 @@ impl Section {
     pub fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
         writer.write(SECTION_HEADER)?;
         writer.write(SPACE)?;
-        write_quoted(self.title.as_bytes(), writer)?;
+        write_quoted(&self.title, writer)?;
         writer.write(ENDL)?;
-        writer.write(COMMA)?;
 
         for node in &self.nodes {
             node.render(writer)?;
@@ -120,7 +140,7 @@ impl Section {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Style {
     Bold,
     Italic,
@@ -133,6 +153,7 @@ impl Default for Style {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct RoffText {
     content: String,
     style: Style,
@@ -191,30 +212,33 @@ pub enum RoffNode {
 }
 
 impl RoffNode {
-    pub fn paragraph<C>(content: C) -> Self
+    pub fn paragraph<I, R>(content: I) -> Self
     where
-        C: IntoIterator<Item = RoffText>,
+        I: IntoIterator<Item = R>,
+        R: Roffable,
     {
-        Self::Paragraph(content.into_iter().collect())
+        Self::Paragraph(content.into_iter().map(|item| item.roff()).collect())
     }
 
-    pub fn indented_paragraph<C>(content: C, indentation: Option<u8>) -> Self
+    pub fn indented_paragraph<I, R>(content: I, indentation: Option<u8>) -> Self
     where
-        C: IntoIterator<Item = RoffText>,
+        I: IntoIterator<Item = R>,
+        R: Roffable,
     {
         Self::IndentedParagraph {
-            content: content.into_iter().collect(),
+            content: content.into_iter().map(|item| item.roff()).collect(),
             indentation,
         }
     }
 
-    pub fn tagged_paragraph<C>(content: C, tag: RoffText) -> Self
+    pub fn tagged_paragraph<I, R>(content: I, tag: R) -> Self
     where
-        C: IntoIterator<Item = RoffText>,
+        I: IntoIterator<Item = R>,
+        R: Roffable,
     {
         Self::TaggedParagraph {
-            content: content.into_iter().collect(),
-            tag,
+            content: content.into_iter().map(|item| item.roff()).collect(),
+            tag: tag.roff(),
         }
     }
 
@@ -226,8 +250,6 @@ impl RoffNode {
                 for text in content {
                     text.render(writer)?;
                 }
-                writer.write(ENDL)?;
-                writer.write(COMMA)?;
             }
             RoffNode::IndentedParagraph {
                 content,
@@ -241,8 +263,6 @@ impl RoffNode {
                 for text in content {
                     text.render(writer)?;
                 }
-                writer.write(ENDL)?;
-                writer.write(COMMA)?;
             }
             RoffNode::TaggedParagraph { content, tag } => {
                 writer.write(TAGGED_PARAGRAPH)?;
@@ -253,11 +273,10 @@ impl RoffNode {
                 for text in content {
                     text.render(writer)?;
                 }
-
-                writer.write(ENDL)?;
-                writer.write(COMMA)?;
             }
         }
+        writer.write(ENDL)?;
+        writer.write(COMMA)?;
 
         Ok(())
     }
@@ -267,15 +286,27 @@ pub trait Roffable {
     fn roff(&self) -> RoffText;
 }
 
-impl Roffable for &str {
-    fn roff(&self) -> RoffText {
-        RoffText::new(self.to_string(), None)
-    }
-}
-
 impl Roffable for String {
     fn roff(&self) -> RoffText {
         RoffText::new(self.clone(), None)
+    }
+}
+
+impl Roffable for &str {
+    fn roff(&self) -> RoffText {
+        self.to_string().roff()
+    }
+}
+
+impl Roffable for RoffText {
+    fn roff(&self) -> RoffText {
+        self.clone()
+    }
+}
+
+impl Roffable for u8 {
+    fn roff(&self) -> RoffText {
+        self.to_string().roff()
     }
 }
 
@@ -299,7 +330,7 @@ mod tests {
                 vec![RoffNode::indented_paragraph(
                     vec![
                         "Lorem ipsum".roff().italic(),
-                        " dolor sit amet, consectetur adipiscing elit. Vivamus quis malesuada eros."
+                        " dolor sit amet, consectetur adipiscing elit. Vivamus quis malesuada eros.".roff()
                             .roff(),
                     ],
                     Some(4),
@@ -315,20 +346,17 @@ mod tests {
 
         let rendered = roff.to_string().unwrap();
         assert_eq!(
-            r#".TH "test" "1" 
+            r#".TH "test" "1"
 .
 .SH "test section 1"
-.
 .P
 this is some very \fBspecial\fR text
 .
 .SH "test section 2"
-.
 .IP "" 4
 \fILorem ipsum\fR dolor sit amet, consectetur adipiscing elit\. Vivamus quis malesuada eros\.
 .
 .SH "test section 3"
-.
 .TP
 \fBparagraph title\fR
 tagged paragraph with some content
