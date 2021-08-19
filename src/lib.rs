@@ -675,4 +675,16 @@ if x\.len() > 0 {
             rendered
         )
     }
+
+    #[test]
+    fn it_escapes() {
+        let input = "This-is-some-text
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus quis malesuada eros.";
+
+        assert_eq!(
+            escape(input),
+            "This\\-is\\-some\\-text
+Lorem ipsum dolor sit amet, consectetur adipiscing elit\\. Vivamus quis malesuada eros\\.",
+        )
+    }
 }
