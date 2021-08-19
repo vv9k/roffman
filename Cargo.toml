@@ -10,4 +10,3 @@ license = "MIT"
 
 
 [dependencies]
-thiserror = "1"

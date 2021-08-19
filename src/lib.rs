@@ -1,5 +1,7 @@
+use std::error::Error;
+use std::fmt;
+use std::fmt::Formatter;
 use std::io::{self, Write};
-use thiserror::Error;
 
 const COMMA: &[u8] = b".\n";
 const SPACE: &[u8] = b" ";
@@ -14,12 +16,36 @@ const PARAGRAPH: &[u8] = b".P";
 const INDENTED_PARAGRAPH: &[u8] = b".IP";
 const TAGGED_PARAGRAPH: &[u8] = b".TP";
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum RoffError {
-    #[error("Failed to render roff as string - `{0}`")]
     StringRenderFailed(String),
-    #[error("Failed to render roff - `{0}`")]
-    RenderFailed(#[from] io::Error),
+    RenderFailed(io::Error),
+}
+
+impl fmt::Display for RoffError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            RoffError::StringRenderFailed(err) => {
+                write!(f, "Failed to render ROFF to string - `{}`", err)
+            }
+            RoffError::RenderFailed(err) => write!(f, "Failed to render ROFF - `{}`", err),
+        }
+    }
+}
+
+impl Error for RoffError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            RoffError::RenderFailed(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+impl From<io::Error> for RoffError {
+    fn from(err: io::Error) -> Self {
+        Self::RenderFailed(err)
+    }
 }
 
 fn escape<T: AsRef<str>>(text: T) -> String {
