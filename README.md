@@ -5,6 +5,14 @@
 
 A crate to generate roff man pages.
 
+## Usage
+
+Add the following to the `Cargo.toml`:
+```toml
+[dependencies]
+roffman = "0.1"
+```
+
 ## Example
 ```rust
 use roffman::{IntoRoffNode, Roff, Roffable, RoffNode};
