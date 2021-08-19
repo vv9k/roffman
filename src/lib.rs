@@ -124,9 +124,9 @@ fn escape<T: AsRef<str>>(text: T) -> String {
 }
 
 fn write_quoted(roff: &RoffText, writer: &mut impl Write) -> Result<(), RoffError> {
-    writer.write(QUOTE)?;
+    writer.write_all(QUOTE)?;
     roff.render(writer)?;
-    writer.write(QUOTE)?;
+    writer.write_all(QUOTE)?;
     Ok(())
 }
 
@@ -187,29 +187,29 @@ impl Roff {
     }
 
     fn write_title(&self, writer: &mut impl Write) -> Result<(), RoffError> {
-        writer.write(SPACE)?;
+        writer.write_all(SPACE)?;
         write_quoted(&self.title, writer)
     }
 
     fn write_section(&self, writer: &mut impl Write) -> Result<(), RoffError> {
-        writer.write(SPACE)?;
+        writer.write_all(SPACE)?;
         write_quoted(&self.section.roff(), writer)
     }
 
     fn write_date(&self, writer: &mut impl Write) -> Result<(), RoffError> {
         if let Some(date) = &self.date {
-            writer.write(SPACE)?;
+            writer.write_all(SPACE)?;
             write_quoted(&date, writer)?;
         }
         Ok(())
     }
 
     fn write_title_header(&self, writer: &mut impl Write) -> Result<(), RoffError> {
-        writer.write(TITLE_HEADER)?;
+        writer.write_all(TITLE_HEADER)?;
         self.write_title(writer)?;
         self.write_section(writer)?;
         self.write_date(writer)?;
-        writer.write(COMMA)?;
+        writer.write_all(COMMA)?;
         Ok(())
     }
 
@@ -257,18 +257,18 @@ impl Section {
     }
 
     fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
-        writer.write(ENDL)?;
-        writer.write(SECTION_HEADER)?;
-        writer.write(SPACE)?;
+        writer.write_all(ENDL)?;
+        writer.write_all(SECTION_HEADER)?;
+        writer.write_all(SPACE)?;
         write_quoted(&self.title, writer)?;
-        writer.write(ENDL)?;
+        writer.write_all(ENDL)?;
         if let Some(subtitle) = &self.subtitle {
-            writer.write(SUB_HEADER)?;
-            writer.write(SPACE)?;
-            writer.write(QUOTE)?;
+            writer.write_all(SUB_HEADER)?;
+            writer.write_all(SPACE)?;
+            writer.write_all(QUOTE)?;
             subtitle.render(writer)?;
-            writer.write(QUOTE)?;
-            writer.write(ENDL)?;
+            writer.write_all(QUOTE)?;
+            writer.write_all(ENDL)?;
         }
 
         for node in &self.nodes {
@@ -323,19 +323,19 @@ impl RoffText {
     fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
         let styled = match self.style {
             Style::Bold => {
-                writer.write(BOLD)?;
+                writer.write_all(BOLD)?;
                 true
             }
             Style::Italic => {
-                writer.write(ITALIC)?;
+                writer.write_all(ITALIC)?;
                 true
             }
             Style::Normal => false,
         };
 
-        writer.write(self.content.as_bytes())?;
+        writer.write_all(self.content.as_bytes())?;
         if styled {
-            writer.write(FONT_END)?;
+            writer.write_all(FONT_END)?;
         }
 
         Ok(())
@@ -447,83 +447,83 @@ impl RoffNodeInner {
 
     fn render<W: Write>(&self, writer: &mut W, nested: bool) -> Result<(), RoffError> {
         if nested {
-            writer.write(ENDL)?;
-            writer.write(NESTED_START)?;
+            writer.write_all(ENDL)?;
+            writer.write_all(NESTED_START)?;
         }
         match self {
             RoffNodeInner::Text(text) => {
                 let styled = match text.style {
                     Style::Bold => {
-                        writer.write(BOLD)?;
+                        writer.write_all(BOLD)?;
                         true
                     }
                     Style::Italic => {
-                        writer.write(ITALIC)?;
+                        writer.write_all(ITALIC)?;
                         true
                     }
                     Style::Normal => false,
                 };
 
-                writer.write(text.content.as_bytes())?;
+                writer.write_all(text.content.as_bytes())?;
                 if styled {
-                    writer.write(FONT_END)?;
+                    writer.write_all(FONT_END)?;
                 }
             }
             RoffNodeInner::Paragraph(content) => {
-                writer.write(ENDL)?;
-                writer.write(PARAGRAPH)?;
-                writer.write(ENDL)?;
+                writer.write_all(ENDL)?;
+                writer.write_all(PARAGRAPH)?;
+                writer.write_all(ENDL)?;
                 for node in content {
                     node.render(writer, !node.is_text())?;
                 }
-                writer.write(COMMA)?;
+                writer.write_all(COMMA)?;
             }
             RoffNodeInner::IndentedParagraph {
                 content,
                 indentation,
             } => {
-                writer.write(ENDL)?;
-                writer.write(INDENTED_PARAGRAPH)?;
+                writer.write_all(ENDL)?;
+                writer.write_all(INDENTED_PARAGRAPH)?;
                 if let Some(indentation) = indentation {
-                    writer.write(format!(" \"\" {}", indentation).as_bytes())?;
+                    writer.write_all(format!(" \"\" {}", indentation).as_bytes())?;
                 }
-                writer.write(ENDL)?;
+                writer.write_all(ENDL)?;
                 for node in content {
                     node.render(writer, !node.is_text())?;
                 }
-                writer.write(COMMA)?;
+                writer.write_all(COMMA)?;
             }
             RoffNodeInner::TaggedParagraph {
                 content,
                 title: tag,
             } => {
-                writer.write(ENDL)?;
-                writer.write(TAGGED_PARAGRAPH)?;
-                writer.write(ENDL)?;
+                writer.write_all(ENDL)?;
+                writer.write_all(TAGGED_PARAGRAPH)?;
+                writer.write_all(ENDL)?;
                 tag.render(writer)?;
-                writer.write(ENDL)?;
+                writer.write_all(ENDL)?;
 
                 for node in content {
                     node.render(writer, !node.is_text())?;
                 }
-                writer.write(COMMA)?;
+                writer.write_all(COMMA)?;
             }
             RoffNodeInner::Example(content) => {
-                writer.write(ENDL)?;
-                writer.write(EXAMPLE_START)?;
-                writer.write(ENDL)?;
+                writer.write_all(ENDL)?;
+                writer.write_all(EXAMPLE_START)?;
+                writer.write_all(ENDL)?;
                 for node in content {
                     node.render(writer)?;
                 }
-                writer.write(ENDL)?;
-                writer.write(EXAMPLE_END)?;
-                writer.write(COMMA)?;
+                writer.write_all(ENDL)?;
+                writer.write_all(EXAMPLE_END)?;
+                writer.write_all(COMMA)?;
             }
         }
 
         if nested {
-            writer.write(ENDL)?;
-            writer.write(NESTED_END)?;
+            writer.write_all(ENDL)?;
+            writer.write_all(NESTED_END)?;
         }
 
         Ok(())
