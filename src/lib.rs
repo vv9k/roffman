@@ -5,37 +5,35 @@
 //! ```
 //! use roffman::{IntoRoffNode, Roff, Roffable, RoffNode};
 //!
-//! fn main() {
-//!     let roff = Roff::new("roffman", 7).section(
-//!         "BASIC USAGE",
-//!         vec![
-//!             RoffNode::paragraph(vec![
-//!                 "This is how you create a basic paragraph using roffman.",
-//!             ]),
-//!             RoffNode::indented_paragraph(
-//!                 vec![
-//!                     "This line should be slightly indented to the ".roff(),
-//!                     "right.".roff().bold(),
-//!                 ],
-//!                 Some(4),
-//!             ),
-//!             RoffNode::text("And some example "),
-//!             RoffNode::text("code".roff().italic()),
-//!             RoffNode::text(":"),
-//!             RoffNode::example(vec![
-//!                 r#"
+//!let roff = Roff::new("roffman", 7).section(
+//!    "BASIC USAGE",
+//!    vec![
+//!        RoffNode::paragraph(vec![
+//!            "This is how you create a basic paragraph using roffman.",
+//!        ]),
+//!        RoffNode::indented_paragraph(
+//!            vec![
+//!                "This line should be slightly indented to the ".roff(),
+//!                "right.".roff().bold(),
+//!            ],
+//!            Some(4),
+//!        ),
+//!        RoffNode::text("And some example "),
+//!        RoffNode::text("code".roff().italic()),
+//!        RoffNode::text(":"),
+//!        RoffNode::example(vec![
+//!            r#"
 //! impl Roffable for u8 {
 //!     fn roff(&self) -> RoffText {
 //!         self.to_string().roff()
 //!     }
 //! }"#,
-//!             ]),
-//!         ],
-//!     );
+//!        ]),
+//!    ],
+//!);
 //!
-//!     let rendered = roff.to_string().unwrap();
-//!     println!("{}", rendered);
-//! }
+//!let rendered = roff.to_string().unwrap();
+//!println!("{}", rendered);
 //! ```
 //!
 //! will produce:
@@ -199,7 +197,7 @@ impl Roff {
     fn write_date(&self, writer: &mut impl Write) -> Result<(), RoffError> {
         if let Some(date) = &self.date {
             writer.write_all(SPACE)?;
-            write_quoted(&date, writer)?;
+            write_quoted(date, writer)?;
         }
         Ok(())
     }
@@ -438,11 +436,7 @@ enum RoffNodeInner {
 impl RoffNodeInner {
     /// Returns `true` if the node is the [`RoffNode::Text`](RoffNode::Text) variant.
     pub fn is_text(&self) -> bool {
-        if let &RoffNodeInner::Text(_) = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, &RoffNodeInner::Text(_))
     }
 
     fn render<W: Write>(&self, writer: &mut W, nested: bool) -> Result<(), RoffError> {
