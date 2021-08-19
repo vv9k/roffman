@@ -1,3 +1,5 @@
+//! # roffman - create ROFF man pages in rust with ease!
+
 use std::error::Error;
 use std::fmt;
 use std::fmt::Formatter;
@@ -19,6 +21,7 @@ const NESTED_START: &[u8] = b".RS";
 const NESTED_END: &[u8] = b".RE";
 
 #[derive(Debug)]
+/// An error type returned by the functions used in this crate.
 pub enum RoffError {
     StringRenderFailed(String),
     RenderFailed(io::Error),
@@ -63,6 +66,8 @@ fn write_quoted(roff: &RoffText, writer: &mut impl Write) -> Result<(), RoffErro
     Ok(())
 }
 
+/// Represents a ROFF document that can be rendered and displayed
+/// with tools like [`man`](https://man7.org/linux/man-pages/man1/man.1.html).
 pub struct Roff {
     title: RoffText,
     date: Option<RoffText>,
@@ -71,7 +76,8 @@ pub struct Roff {
 }
 
 impl Roff {
-    pub fn new<R: Roffable>(title: R, section: u8) -> Self {
+    /// Create a new `Roff` with a `title` and a `section`.
+    pub fn new(title: impl Roffable, section: u8) -> Self {
         Self {
             title: title.roff(),
             date: None,
@@ -80,6 +86,8 @@ impl Roff {
         }
     }
 
+    /// Renders this `Roff` to a `String` returning an error if a write fails or the rendered
+    /// output contains invalid UTF-8 byte sequences.
     pub fn to_string(&self) -> Result<String, RoffError> {
         let mut writer = std::io::BufWriter::new(vec![]);
         self.render(&mut writer)
@@ -92,19 +100,21 @@ impl Roff {
         .map_err(|e| RoffError::StringRenderFailed(e.to_string()))
     }
 
-    pub fn date<D: Roffable>(mut self, date: D) -> Self {
+    /// Builder method for adding a date to a `Roff`.
+    pub fn date(mut self, date: impl Roffable) -> Self {
         self.date = Some(date.roff());
         self
     }
 
-    pub fn section<I, R>(mut self, title: R, content: I) -> Self
+    /// Builder method for adding a new section to a `Roff`.
+    pub fn section<I, R>(mut self, title: impl Roffable, content: I) -> Self
     where
-        I: IntoIterator<Item = RoffNode>,
-        R: Roffable,
+        I: IntoIterator<Item = R>,
+        R: IntoRoffNode,
     {
         self.sections.push(Section {
             title: title.roff(),
-            nodes: content.into_iter().collect(),
+            nodes: content.into_iter().map(R::into_roff).collect(),
         });
         self
     }
@@ -137,6 +147,7 @@ impl Roff {
         Ok(())
     }
 
+    /// Renders this `Roff` to a `writer` returning an error if any of the writes fails.
     pub fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
         self.write_title_header(writer)?;
 
@@ -148,7 +159,7 @@ impl Roff {
     }
 }
 
-pub struct Section {
+struct Section {
     title: RoffText,
     nodes: Vec<RoffNode>,
 }
@@ -169,6 +180,7 @@ impl Section {
 }
 
 #[derive(Copy, Clone, Debug)]
+/// Style that can be applied to [`RoffText`](RoffText)
 pub enum Style {
     Bold,
     Italic,
@@ -182,6 +194,7 @@ impl Default for Style {
 }
 
 #[derive(Debug, Clone)]
+/// Wrapper type for styled text in ROFF.
 pub struct RoffText {
     content: String,
     style: Style,
@@ -195,17 +208,19 @@ impl RoffText {
         }
     }
 
+    /// Set the style of this text to bold.
     pub fn bold(mut self) -> Self {
         self.style = Style::Bold;
         self
     }
 
+    /// Set the style of this text to italic.
     pub fn italic(mut self) -> Self {
         self.style = Style::Italic;
         self
     }
 
-    pub fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
+    fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
         let styled = match self.style {
             Style::Bold => {
                 writer.write(BOLD)?;
@@ -227,32 +242,32 @@ impl RoffText {
     }
 }
 
+/// Base struct used to create ROFFs.
 pub enum RoffNode {
+    /// The most basic node type, contains only text with style.
     Text(RoffText),
+    /// A simple paragraph that can contain nested items.
     Paragraph(Vec<RoffNode>),
+    /// Indented paragraph that can contain nested items. If no indentation is provided the default
+    /// is `4`.
     IndentedParagraph {
         content: Vec<RoffNode>,
         indentation: Option<u8>,
     },
+    /// Paragraph with a title.
     TaggedParagraph {
         content: Vec<RoffNode>,
-        tag: RoffText,
+        title: RoffText,
     },
 }
 
 impl RoffNode {
-    fn is_text(&self) -> bool {
-        if let &RoffNode::Text(_) = self {
-            true
-        } else {
-            false
-        }
-    }
-
+    /// Creates a new text node.
     pub fn text<R: Roffable>(text: R) -> Self {
         Self::Text(text.roff())
     }
 
+    /// Creates a new paragraph node.
     pub fn paragraph<I, R>(content: I) -> Self
     where
         I: IntoIterator<Item = R>,
@@ -261,6 +276,7 @@ impl RoffNode {
         Self::Paragraph(content.into_iter().map(|item| item.into_roff()).collect())
     }
 
+    /// Creates a new indented paragraph node.
     pub fn indented_paragraph<I, R>(content: I, indentation: Option<u8>) -> Self
     where
         I: IntoIterator<Item = R>,
@@ -272,7 +288,8 @@ impl RoffNode {
         }
     }
 
-    pub fn tagged_paragraph<I, R, T>(content: I, tag: T) -> Self
+    /// Creates a new paragraph node with a title.
+    pub fn tagged_paragraph<I, R, T>(content: I, title: T) -> Self
     where
         I: IntoIterator<Item = R>,
         R: IntoRoffNode,
@@ -280,11 +297,20 @@ impl RoffNode {
     {
         Self::TaggedParagraph {
             content: content.into_iter().map(|item| item.into_roff()).collect(),
-            tag: tag.roff(),
+            title: title.roff(),
         }
     }
 
-    pub fn render<W: Write>(&self, writer: &mut W, nested: bool) -> Result<(), RoffError> {
+    /// Returns `true` if the node is the [`RoffNode::Text`](RoffNode::Text) variant.
+    pub fn is_text(&self) -> bool {
+        if let &RoffNode::Text(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn render<W: Write>(&self, writer: &mut W, nested: bool) -> Result<(), RoffError> {
         if nested {
             writer.write(ENDL)?;
             writer.write(NESTED_START)?;
@@ -333,7 +359,10 @@ impl RoffNode {
                 writer.write(ENDL)?;
                 writer.write(COMMA)?;
             }
-            RoffNode::TaggedParagraph { content, tag } => {
+            RoffNode::TaggedParagraph {
+                content,
+                title: tag,
+            } => {
                 writer.write(TAGGED_PARAGRAPH)?;
                 writer.write(ENDL)?;
                 tag.render(writer)?;
@@ -355,7 +384,9 @@ impl RoffNode {
     }
 }
 
+/// A trait that describes items that can be turned into a [`RoffNode`](RoffNode).
 pub trait IntoRoffNode {
+    /// Convert this item into a `RoffNode`.
     fn into_roff(self) -> RoffNode;
 }
 
@@ -383,7 +414,9 @@ impl IntoRoffNode for String {
     }
 }
 
+/// Convenience trait to convert items to [`RoffText`](RoffText).
 pub trait Roffable {
+    /// Returns this item as [`RoffText`](RoffText).
     fn roff(&self) -> RoffText;
 }
 
