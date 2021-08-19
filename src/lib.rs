@@ -5,61 +5,88 @@
 //! ```
 //! use roffman::{IntoRoffNode, Roff, Roffable, RoffNode};
 //!
-//!let roff = Roff::new("roffman", 7)
-//! .date("August 2021")
-//! .section(
-//!    "BASIC USAGE",
-//!    vec![
-//!        RoffNode::paragraph(vec![
-//!            "This is how you create a basic paragraph using roffman.",
-//!        ]),
-//!        RoffNode::indented_paragraph(
-//!            vec![
-//!                "This line should be slightly indented to the ".roff(),
-//!                "right.".roff().bold(),
-//!            ],
-//!            Some(4),
-//!        ),
-//!        RoffNode::text("And some example "),
-//!        RoffNode::text("code".roff().italic()),
-//!        RoffNode::text(":"),
-//!        RoffNode::example(vec![
-//!            r#"
+//! let roff = Roff::new("roffman", 7)
+//!     .date("August 2021")
+//!     .section(
+//!        "BASIC USAGE",
+//!        vec![
+//!            RoffNode::paragraph(vec![
+//!                "This is how you create a basic paragraph using roffman.",
+//!            ]),
+//!            RoffNode::indented_paragraph(
+//!                vec![
+//!                    "This line should be slightly indented to the ".roff(),
+//!                    "right.".roff().bold(),
+//!                ],
+//!                Some(4),
+//!            ),
+//!            RoffNode::paragraph(vec![
+//!                "And some example ".roff(),
+//!                "code".roff().italic(),
+//!                ":".roff(),
+//!            ]),
+//!            RoffNode::example(vec![
+//!                r#"
 //! impl Roffable for u8 {
 //!     fn roff(&self) -> RoffText {
 //!         self.to_string().roff()
 //!     }
 //! }"#,
-//!        ]),
-//!    ],
-//!);
+//!             ]),
+//!         ],
+//!     );
 //!
-//!let rendered = roff.to_string().unwrap();
-//!println!("{}", rendered);
-//! ```
+//! let rendered = roff.to_string().unwrap();
 //!
-//! will produce:
-//! ```roff
+//! let output = r#"
 //! .TH "roffman" "7" "August 2021"
 //! .
+//!
 //! .SH "BASIC USAGE"
 //!
 //! .P
 //! This is how you create a basic paragraph using roffman\.
-//! .br
+//! .
 //!
 //! .IP "" 4
 //! This line should be slightly indented to the \fBright\.\fR
-//! .br
+//! .
+//!
+//! .P
 //! And some example \fIcode\fR:
+//! .
+//!
 //! .EX
 //!
 //! impl Roffable for u8 {
 //!     fn roff(&self) \-> RoffText {
-//!     self\.to_string()\.roff()
+//!         self\.to_string()\.roff()
+//!     }
 //! }
-//! }
-//! .EE
+//! .EE"#;
+//!
+//! assert_eq!(rendered.trim(), output.trim());
+//! ```
+//!
+//!
+//! which will look something like this:
+//! ```text
+//! roffman(7)            Miscellaneous Information Manual           roffman(7)
+//!
+//! BASIC USAGE
+//!        This is how you create a basic paragraph using roffman.
+//!
+//!            This line should be slightly indented to the right.
+//!
+//!        And some example code:
+//!
+//!        impl Roffable for u8 {
+//!            fn roff(&self) -> RoffText {
+//!                self.to_string().roff()
+//!            }
+//!        }
+//!
+//!                                                                  roffman(7)
 //! ```
 
 use std::error::Error;
@@ -67,7 +94,7 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::io::{self, Write};
 
-const COMMA: &[u8] = b"\n.";
+const COMMA: &[u8] = b"\n.\n";
 const SPACE: &[u8] = b" ";
 const QUOTE: &[u8] = b"\"";
 const ENDL: &[u8] = b"\n";
@@ -84,7 +111,6 @@ const NESTED_START: &[u8] = b".RS";
 const NESTED_END: &[u8] = b".RE";
 const EXAMPLE_START: &[u8] = b".EX";
 const EXAMPLE_END: &[u8] = b".EE";
-const BREAK: &[u8] = b"\n.br\n";
 
 #[derive(Debug)]
 /// An error type returned by the functions used in this crate.
@@ -474,7 +500,7 @@ impl RoffNodeInner {
                 for node in content {
                     node.render(writer, !node.is_text())?;
                 }
-                writer.write_all(BREAK)?;
+                writer.write_all(COMMA)?;
             }
             RoffNodeInner::IndentedParagraph {
                 content,
@@ -489,7 +515,7 @@ impl RoffNodeInner {
                 for node in content {
                     node.render(writer, !node.is_text())?;
                 }
-                writer.write_all(BREAK)?;
+                writer.write_all(COMMA)?;
             }
             RoffNodeInner::TaggedParagraph {
                 content,
@@ -504,7 +530,7 @@ impl RoffNodeInner {
                 for node in content {
                     node.render(writer, !node.is_text())?;
                 }
-                writer.write_all(BREAK)?;
+                writer.write_all(COMMA)?;
             }
             RoffNodeInner::Example(content) => {
                 writer.write_all(ENDL)?;
@@ -631,24 +657,25 @@ mod tests {
         assert_eq!(
             r#".TH "test" "1"
 .
+
 .SH "test section 1"
 
 .P
 this is some very \fBspecial\fR text
-.br
+.
 
 .SH "test section 2"
 
 .IP "" 4
 \fILorem ipsum\fR dolor sit amet, consectetur adipiscing elit\. Vivamus quis malesuada eros\.
-.br
+.
 
 .SH "test section 3"
 
 .TP
 \fBparagraph title\fR
 tagged paragraph with some content
-.br
+.
 "#,
             rendered
         )
@@ -679,6 +706,7 @@ tagged paragraph with some content
         assert_eq!(
             r#".TH "test" "1"
 .
+
 .SH "BASE SECTION"
 .SS "with some subtitle\.\.\."
 
@@ -690,17 +718,17 @@ some nested paragraph
 .RS
 .P
 some doubly nested paragraph
-.br
+.
 
 .RE
-.br
+.
 
 .RE
-.br
+.
 
 .P
 back two levels left without roffs
-.br
+.
 "#,
             rendered
         )
@@ -726,6 +754,7 @@ back two levels left without roffs
         assert_eq!(
             r#".TH "test\-examples" "3"
 .
+
 .SH "BASE SECTION"
 Lorem ipsum dolor sit amet, consectetur adipiscing elit\. Vivamus quis malesuada eros\.
 .EX

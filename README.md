@@ -19,49 +19,62 @@ use roffman::{IntoRoffNode, Roff, Roffable, RoffNode};
 
 fn main() {
     let roff = Roff::new("roffman-manual", 7)
-    .date("August 2021")
-    .section(
-        "BASIC USAGE",
-        vec![
-            RoffNode::paragraph(vec![
-                "This is how you create a basic paragraph using roffman.",
-            ]),
-            RoffNode::indented_paragraph(
-                vec![
-                    "This line should be slightly indented to the ".roff(),
-                    "right.".roff().bold(),
-                ],
-                Some(4),
-            ),
-            RoffNode::text("And some example "),
-            RoffNode::text("code".roff().italic()),
-            RoffNode::text(":"),
-            RoffNode::example(vec![
-                r#"
+        .date("August 2021")
+        .section(
+            "BASIC USAGE",
+            vec![
+                RoffNode::paragraph(vec![
+                    "This is how you create a basic paragraph using roffman.",
+                ]),
+                RoffNode::indented_paragraph(
+                    vec![
+                        "This line should be slightly indented to the ".roff(),
+                        "right.".roff().bold(),
+                    ],
+                    Some(4),
+                ),
+                RoffNode::paragraph(vec![
+                    "And some example ".roff(),
+                    "code".roff().italic(),
+                    ":".roff(),
+                ]),
+                RoffNode::text(":"),
+                RoffNode::example(vec![
+                    r#"
 impl Roffable for u8 {
     fn roff(&self) -> RoffText {
         self.to_string().roff()
     }
 }"#,
-            ]),
-        ],
-    );
+                ]),
+            ],
+        );
 
     let rendered = roff.to_string().unwrap();
-    
-    let output = r#"
-.TH "roffman" "7"
+    println!("{}", rendered);
+}
+```
+
+Output:
+
+```roff
+.TH "roffman" "7" "August 2021"
 .
+
 .SH "BASIC USAGE"
 
 .P
 This is how you create a basic paragraph using roffman\.
-.br
+.
 
 .IP "" 4
 This line should be slightly indented to the \fBright\.\fR
-.br
+.
+
+.P
 And some example \fIcode\fR:
+.
+
 .EX
 
 impl Roffable for u8 {
@@ -69,15 +82,27 @@ impl Roffable for u8 {
         self\.to_string()\.roff()
     }
 }
-.EE"#;
-
-    assert_eq!(rendered.trim(), output.trim());
-}
+.EE
 ```
 
-Output:
+which will look something like this:
+```
+roffman(7)            Miscellaneous Information Manual           roffman(7)
 
-```roff
+BASIC USAGE
+       This is how you create a basic paragraph using roffman.
+
+           This line should be slightly indented to the right.
+
+       And some example code:
+
+       impl Roffable for u8 {
+           fn roff(&self) -> RoffText {
+               self.to_string().roff()
+           }
+       }
+
+                                                                 roffman(7)
 ```
 
 ## License
