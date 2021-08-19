@@ -465,8 +465,12 @@ enum RoffNodeInner {
 
 impl RoffNodeInner {
     /// Returns `true` if the node is the [`RoffNode::Text`](RoffNode::Text) variant.
-    pub fn is_text(&self) -> bool {
+    fn is_text(&self) -> bool {
         matches!(self, &RoffNodeInner::Text(_))
+    }
+
+    fn is_nestable(&self) -> bool {
+        !self.is_text()
     }
 
     fn render<W: Write>(&self, writer: &mut W, nested: bool) -> Result<(), RoffError> {
@@ -498,7 +502,7 @@ impl RoffNodeInner {
                 writer.write_all(PARAGRAPH)?;
                 writer.write_all(ENDL)?;
                 for node in content {
-                    node.render(writer, !node.is_text())?;
+                    node.render(writer, node.is_nestable())?;
                 }
                 writer.write_all(COMMA)?;
             }
@@ -513,7 +517,7 @@ impl RoffNodeInner {
                 }
                 writer.write_all(ENDL)?;
                 for node in content {
-                    node.render(writer, !node.is_text())?;
+                    node.render(writer, node.is_nestable())?;
                 }
                 writer.write_all(COMMA)?;
             }
@@ -528,7 +532,7 @@ impl RoffNodeInner {
                 writer.write_all(ENDL)?;
 
                 for node in content {
-                    node.render(writer, !node.is_text())?;
+                    node.render(writer, node.is_nestable())?;
                 }
                 writer.write_all(COMMA)?;
             }
