@@ -13,6 +13,7 @@ const BOLD: &[u8] = b"\\fB";
 const ITALIC: &[u8] = b"\\fI";
 const FONT_END: &[u8] = b"\\fR";
 const SECTION_HEADER: &[u8] = b".SH";
+const SUB_HEADER: &[u8] = b".SS";
 const TITLE_HEADER: &[u8] = b".TH";
 const PARAGRAPH: &[u8] = b".P";
 const INDENTED_PARAGRAPH: &[u8] = b".IP";
@@ -107,15 +108,21 @@ impl Roff {
     }
 
     /// Builder method for adding a new section to a `Roff`.
-    pub fn section<I, R>(mut self, title: impl Roffable, content: I) -> Self
+    pub fn section<I, R>(
+        mut self,
+        title: impl Roffable,
+        subtitle: Option<impl Roffable>,
+        content: I,
+    ) -> Self
     where
         I: IntoIterator<Item = R>,
         R: IntoRoffNode,
     {
-        self.sections.push(Section {
-            title: title.roff(),
-            nodes: content.into_iter().map(R::into_roff).collect(),
-        });
+        let mut section = Section::new(title, content);
+        if let Some(subtitle) = subtitle {
+            section = section.subtitle(subtitle);
+        }
+        self.sections.push(section);
         self
     }
 
@@ -159,17 +166,46 @@ impl Roff {
     }
 }
 
-struct Section {
+/// A single section of the ROFF document.
+pub struct Section {
     title: RoffText,
+    subtitle: Option<RoffText>,
     nodes: Vec<RoffNode>,
 }
 
 impl Section {
-    pub fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
+    /// Create a new section with `title` and `content`.
+    pub fn new<I, R>(title: impl Roffable, content: I) -> Self
+    where
+        I: IntoIterator<Item = R>,
+        R: IntoRoffNode,
+    {
+        Self {
+            title: title.roff(),
+            subtitle: None,
+            nodes: content.into_iter().map(R::into_roff).collect(),
+        }
+    }
+
+    /// Set the sub heading of this section.
+    pub fn subtitle(mut self, subtitle: impl Roffable) -> Self {
+        self.subtitle = Some(subtitle.roff());
+        self
+    }
+
+    fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
         writer.write(SECTION_HEADER)?;
         writer.write(SPACE)?;
         write_quoted(&self.title, writer)?;
         writer.write(ENDL)?;
+        if let Some(subtitle) = &self.subtitle {
+            writer.write(SUB_HEADER)?;
+            writer.write(SPACE)?;
+            writer.write(QUOTE)?;
+            subtitle.render(writer)?;
+            writer.write(QUOTE)?;
+            writer.write(ENDL)?;
+        }
 
         for node in &self.nodes {
             node.render(writer, false)?;
@@ -453,6 +489,7 @@ mod tests {
         let roff = Roff::new("test", 1)
             .section(
                 "test section 1",
+                        None::<&str>,
                 vec![RoffNode::paragraph(vec![
                     "this is some very ".roff(),
                     "special".roff().bold(),
@@ -461,6 +498,7 @@ mod tests {
             )
             .section(
                 "test section 2",
+                None::<&str>,
                 vec![RoffNode::indented_paragraph(
                     vec![
                         "Lorem ipsum".roff().italic(),
@@ -472,6 +510,7 @@ mod tests {
             )
             .section(
                 "test section 3",
+                None::<&str>,
                 vec![RoffNode::tagged_paragraph(
                     vec!["tagged paragraph with some content".roff()],
                     "paragraph title".roff().bold(),
@@ -505,6 +544,7 @@ tagged paragraph with some content
     fn it_nests_roffs() {
         let roff = Roff::new("test", 1).section(
             "BASE SECTION",
+            Some("with some subtitle..."),
             vec![
                 RoffNode::paragraph(vec![
                     RoffNode::text("some text in first paragraph."),
@@ -523,6 +563,7 @@ tagged paragraph with some content
             r#".TH "test" "1"
 .
 .SH "BASE SECTION"
+.SS "with some subtitle\.\.\."
 .P
 some text in first paragraph\.
 .RS
