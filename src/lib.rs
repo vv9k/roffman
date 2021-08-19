@@ -15,6 +15,8 @@ const TITLE_HEADER: &[u8] = b".TH";
 const PARAGRAPH: &[u8] = b".P";
 const INDENTED_PARAGRAPH: &[u8] = b".IP";
 const TAGGED_PARAGRAPH: &[u8] = b".TP";
+const NESTED_START: &[u8] = b".RS";
+const NESTED_END: &[u8] = b".RE";
 
 #[derive(Debug)]
 pub enum RoffError {
@@ -159,7 +161,7 @@ impl Section {
         writer.write(ENDL)?;
 
         for node in &self.nodes {
-            node.render(writer)?;
+            node.render(writer, false)?;
         }
 
         Ok(())
@@ -226,56 +228,95 @@ impl RoffText {
 }
 
 pub enum RoffNode {
-    Paragraph(Vec<RoffText>),
+    Text(RoffText),
+    Paragraph(Vec<RoffNode>),
     IndentedParagraph {
-        content: Vec<RoffText>,
+        content: Vec<RoffNode>,
         indentation: Option<u8>,
     },
     TaggedParagraph {
-        content: Vec<RoffText>,
+        content: Vec<RoffNode>,
         tag: RoffText,
     },
 }
 
 impl RoffNode {
+    fn is_text(&self) -> bool {
+        if let &RoffNode::Text(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn text<R: Roffable>(text: R) -> Self {
+        Self::Text(text.roff())
+    }
+
     pub fn paragraph<I, R>(content: I) -> Self
     where
         I: IntoIterator<Item = R>,
-        R: Roffable,
+        R: IntoRoffNode,
     {
-        Self::Paragraph(content.into_iter().map(|item| item.roff()).collect())
+        Self::Paragraph(content.into_iter().map(|item| item.into_roff()).collect())
     }
 
     pub fn indented_paragraph<I, R>(content: I, indentation: Option<u8>) -> Self
     where
         I: IntoIterator<Item = R>,
-        R: Roffable,
+        R: IntoRoffNode,
     {
         Self::IndentedParagraph {
-            content: content.into_iter().map(|item| item.roff()).collect(),
+            content: content.into_iter().map(|item| item.into_roff()).collect(),
             indentation,
         }
     }
 
-    pub fn tagged_paragraph<I, R>(content: I, tag: R) -> Self
+    pub fn tagged_paragraph<I, R, T>(content: I, tag: T) -> Self
     where
         I: IntoIterator<Item = R>,
-        R: Roffable,
+        R: IntoRoffNode,
+        T: Roffable,
     {
         Self::TaggedParagraph {
-            content: content.into_iter().map(|item| item.roff()).collect(),
+            content: content.into_iter().map(|item| item.into_roff()).collect(),
             tag: tag.roff(),
         }
     }
 
-    pub fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
+    pub fn render<W: Write>(&self, writer: &mut W, nested: bool) -> Result<(), RoffError> {
+        if nested {
+            writer.write(ENDL)?;
+            writer.write(NESTED_START)?;
+            writer.write(ENDL)?;
+        }
         match self {
+            RoffNode::Text(text) => {
+                let styled = match text.style {
+                    Style::Bold => {
+                        writer.write(BOLD)?;
+                        true
+                    }
+                    Style::Italic => {
+                        writer.write(ITALIC)?;
+                        true
+                    }
+                    Style::Normal => false,
+                };
+
+                writer.write(text.content.as_bytes())?;
+                if styled {
+                    writer.write(FONT_END)?;
+                }
+            }
             RoffNode::Paragraph(content) => {
                 writer.write(PARAGRAPH)?;
                 writer.write(ENDL)?;
-                for text in content {
-                    text.render(writer)?;
+                for node in content {
+                    node.render(writer, !node.is_text())?;
                 }
+                writer.write(ENDL)?;
+                writer.write(COMMA)?;
             }
             RoffNode::IndentedParagraph {
                 content,
@@ -286,9 +327,11 @@ impl RoffNode {
                     writer.write(format!(" \"\" {}", indentation).as_bytes())?;
                 }
                 writer.write(ENDL)?;
-                for text in content {
-                    text.render(writer)?;
+                for node in content {
+                    node.render(writer, !node.is_text())?;
                 }
+                writer.write(ENDL)?;
+                writer.write(COMMA)?;
             }
             RoffNode::TaggedParagraph { content, tag } => {
                 writer.write(TAGGED_PARAGRAPH)?;
@@ -296,15 +339,47 @@ impl RoffNode {
                 tag.render(writer)?;
                 writer.write(ENDL)?;
 
-                for text in content {
-                    text.render(writer)?;
+                for node in content {
+                    node.render(writer, !node.is_text())?;
                 }
+                writer.write(ENDL)?;
+                writer.write(COMMA)?;
             }
         }
-        writer.write(ENDL)?;
-        writer.write(COMMA)?;
+
+        if nested {
+            writer.write(NESTED_END)?;
+        }
 
         Ok(())
+    }
+}
+
+pub trait IntoRoffNode {
+    fn into_roff(self) -> RoffNode;
+}
+
+impl IntoRoffNode for RoffText {
+    fn into_roff(self) -> RoffNode {
+        RoffNode::Text(self)
+    }
+}
+
+impl IntoRoffNode for RoffNode {
+    fn into_roff(self) -> RoffNode {
+        self
+    }
+}
+
+impl IntoRoffNode for &str {
+    fn into_roff(self) -> RoffNode {
+        self.roff().into_roff()
+    }
+}
+
+impl IntoRoffNode for String {
+    fn into_roff(self) -> RoffNode {
+        self.roff().into_roff()
     }
 }
 
@@ -371,6 +446,7 @@ mod tests {
             );
 
         let rendered = roff.to_string().unwrap();
+        println!("{}", rendered);
         assert_eq!(
             r#".TH "test" "1"
 .
@@ -386,6 +462,49 @@ this is some very \fBspecial\fR text
 .TP
 \fBparagraph title\fR
 tagged paragraph with some content
+.
+"#,
+            rendered
+        )
+    }
+
+    #[test]
+    fn it_nests_roffs() {
+        let roff = Roff::new("test", 1).section(
+            "BASE SECTION",
+            vec![
+                RoffNode::paragraph(vec![
+                    RoffNode::text("some text in first paragraph."),
+                    RoffNode::paragraph(vec![
+                        RoffNode::text("some nested paragraph"),
+                        RoffNode::paragraph(vec![RoffNode::text("some doubly nested paragraph")]),
+                    ]),
+                ]),
+                RoffNode::paragraph(vec!["back two levels left", " without roffs"]),
+            ],
+        );
+
+        let rendered = roff.to_string().unwrap();
+        println!("{}", rendered);
+        assert_eq!(
+            r#".TH "test" "1"
+.
+.SH "BASE SECTION"
+.P
+some text in first paragraph\.
+.RS
+.P
+some nested paragraph
+.RS
+.P
+some doubly nested paragraph
+.
+.RE
+.
+.RE
+.
+.P
+back two levels left without roffs
 .
 "#,
             rendered
