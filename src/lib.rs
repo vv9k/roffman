@@ -67,6 +67,7 @@ fn write_quoted(roff: &RoffText, writer: &mut impl Write) -> Result<(), RoffErro
     Ok(())
 }
 
+#[derive(Clone, Debug)]
 /// Represents a ROFF document that can be rendered and displayed
 /// with tools like [`man`](https://man7.org/linux/man-pages/man1/man.1.html).
 pub struct Roff {
@@ -87,7 +88,7 @@ impl Roff {
         }
     }
 
-    /// Renders this `Roff` to a `String` returning an error if a write fails or the rendered
+    /// Renders this roff to a `String` returning an error if a write fails or the rendered
     /// output contains invalid UTF-8 byte sequences.
     pub fn to_string(&self) -> Result<String, RoffError> {
         let mut writer = std::io::BufWriter::new(vec![]);
@@ -101,29 +102,25 @@ impl Roff {
         .map_err(|e| RoffError::StringRenderFailed(e.to_string()))
     }
 
-    /// Builder method for adding a date to a `Roff`.
+    /// Builder method for adding a date to this roff.
     pub fn date(mut self, date: impl Roffable) -> Self {
         self.date = Some(date.roff());
         self
     }
 
-    /// Builder method for adding a new section to a `Roff`.
-    pub fn section<I, R>(
-        mut self,
-        title: impl Roffable,
-        subtitle: Option<impl Roffable>,
-        content: I,
-    ) -> Self
+    /// Add an already defined section to this roff.
+    pub fn add_section(mut self, section: Section) -> Self {
+        self.sections.push(section);
+        self
+    }
+
+    /// Builder method for adding a new section to this roff.
+    pub fn section<I, R>(self, title: impl Roffable, content: I) -> Self
     where
         I: IntoIterator<Item = R>,
         R: IntoRoffNode,
     {
-        let mut section = Section::new(title, content);
-        if let Some(subtitle) = subtitle {
-            section = section.subtitle(subtitle);
-        }
-        self.sections.push(section);
-        self
+        self.add_section(Section::new(title, content))
     }
 
     fn write_title(&self, writer: &mut impl Write) -> Result<(), RoffError> {
@@ -166,6 +163,7 @@ impl Roff {
     }
 }
 
+#[derive(Clone, Debug)]
 /// A single section of the ROFF document.
 pub struct Section {
     title: RoffText,
@@ -229,7 +227,7 @@ impl Default for Style {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Default)]
 /// Wrapper type for styled text in ROFF.
 pub struct RoffText {
     content: String,
@@ -278,6 +276,7 @@ impl RoffText {
     }
 }
 
+#[derive(Clone, Debug)]
 /// Base struct used to create ROFFs.
 pub enum RoffNode {
     /// The most basic node type, contains only text with style.
@@ -489,7 +488,6 @@ mod tests {
         let roff = Roff::new("test", 1)
             .section(
                 "test section 1",
-                        None::<&str>,
                 vec![RoffNode::paragraph(vec![
                     "this is some very ".roff(),
                     "special".roff().bold(),
@@ -498,7 +496,6 @@ mod tests {
             )
             .section(
                 "test section 2",
-                None::<&str>,
                 vec![RoffNode::indented_paragraph(
                     vec![
                         "Lorem ipsum".roff().italic(),
@@ -510,7 +507,6 @@ mod tests {
             )
             .section(
                 "test section 3",
-                None::<&str>,
                 vec![RoffNode::tagged_paragraph(
                     vec!["tagged paragraph with some content".roff()],
                     "paragraph title".roff().bold(),
@@ -518,7 +514,6 @@ mod tests {
             );
 
         let rendered = roff.to_string().unwrap();
-        println!("{}", rendered);
         assert_eq!(
             r#".TH "test" "1"
 .
@@ -542,23 +537,26 @@ tagged paragraph with some content
 
     #[test]
     fn it_nests_roffs() {
-        let roff = Roff::new("test", 1).section(
-            "BASE SECTION",
-            Some("with some subtitle..."),
-            vec![
-                RoffNode::paragraph(vec![
-                    RoffNode::text("some text in first paragraph."),
+        let roff = Roff::new("test", 1).add_section(
+            Section::new(
+                "BASE SECTION",
+                vec![
                     RoffNode::paragraph(vec![
-                        RoffNode::text("some nested paragraph"),
-                        RoffNode::paragraph(vec![RoffNode::text("some doubly nested paragraph")]),
+                        RoffNode::text("some text in first paragraph."),
+                        RoffNode::paragraph(vec![
+                            RoffNode::text("some nested paragraph"),
+                            RoffNode::paragraph(vec![RoffNode::text(
+                                "some doubly nested paragraph",
+                            )]),
+                        ]),
                     ]),
-                ]),
-                RoffNode::paragraph(vec!["back two levels left", " without roffs"]),
-            ],
+                    RoffNode::paragraph(vec!["back two levels left", " without roffs"]),
+                ],
+            )
+            .subtitle("with some subtitle..."),
         );
 
         let rendered = roff.to_string().unwrap();
-        println!("{}", rendered);
         assert_eq!(
             r#".TH "test" "1"
 .
