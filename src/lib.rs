@@ -5,7 +5,9 @@
 //! ```
 //! use roffman::{IntoRoffNode, Roff, Roffable, RoffNode};
 //!
-//!let roff = Roff::new("roffman", 7).section(
+//!let roff = Roff::new("roffman", 7)
+//! .date("August 2021")
+//! .section(
 //!    "BASIC USAGE",
 //!    vec![
 //!        RoffNode::paragraph(vec![
@@ -38,25 +40,26 @@
 //!
 //! will produce:
 //! ```roff
-//! .TH "roffman" "7"
+//! .TH "roffman" "7" "August 2021"
 //! .
 //! .SH "BASIC USAGE"
 //!
 //! .P
 //! This is how you create a basic paragraph using roffman\.
-//! .
+//! .br
+//!
 //! .IP "" 4
 //! This line should be slightly indented to the \fBright\.\fR
-//! .And some example \fIcode\fR:
+//! .br
+//! And some example \fIcode\fR:
 //! .EX
 //!
 //! impl Roffable for u8 {
 //!     fn roff(&self) \-> RoffText {
-//!         self\.to_string()\.roff()
-//!     }
+//!     self\.to_string()\.roff()
+//! }
 //! }
 //! .EE
-//! .
 //! ```
 
 use std::error::Error;
@@ -81,6 +84,7 @@ const NESTED_START: &[u8] = b".RS";
 const NESTED_END: &[u8] = b".RE";
 const EXAMPLE_START: &[u8] = b".EX";
 const EXAMPLE_END: &[u8] = b".EE";
+const BREAK: &[u8] = b"\n.br\n";
 
 #[derive(Debug)]
 /// An error type returned by the functions used in this crate.
@@ -470,7 +474,7 @@ impl RoffNodeInner {
                 for node in content {
                     node.render(writer, !node.is_text())?;
                 }
-                writer.write_all(COMMA)?;
+                writer.write_all(BREAK)?;
             }
             RoffNodeInner::IndentedParagraph {
                 content,
@@ -485,7 +489,7 @@ impl RoffNodeInner {
                 for node in content {
                     node.render(writer, !node.is_text())?;
                 }
-                writer.write_all(COMMA)?;
+                writer.write_all(BREAK)?;
             }
             RoffNodeInner::TaggedParagraph {
                 content,
@@ -500,7 +504,7 @@ impl RoffNodeInner {
                 for node in content {
                     node.render(writer, !node.is_text())?;
                 }
-                writer.write_all(COMMA)?;
+                writer.write_all(BREAK)?;
             }
             RoffNodeInner::Example(content) => {
                 writer.write_all(ENDL)?;
@@ -511,7 +515,6 @@ impl RoffNodeInner {
                 }
                 writer.write_all(ENDL)?;
                 writer.write_all(EXAMPLE_END)?;
-                writer.write_all(COMMA)?;
             }
         }
 
@@ -632,18 +635,21 @@ mod tests {
 
 .P
 this is some very \fBspecial\fR text
-.
+.br
+
 .SH "test section 2"
 
 .IP "" 4
 \fILorem ipsum\fR dolor sit amet, consectetur adipiscing elit\. Vivamus quis malesuada eros\.
-.
+.br
+
 .SH "test section 3"
 
 .TP
 \fBparagraph title\fR
 tagged paragraph with some content
-."#,
+.br
+"#,
             rendered
         )
     }
@@ -684,14 +690,18 @@ some nested paragraph
 .RS
 .P
 some doubly nested paragraph
-.
+.br
+
 .RE
-.
+.br
+
 .RE
-.
+.br
+
 .P
 back two levels left without roffs
-."#,
+.br
+"#,
             rendered
         )
     }
@@ -725,8 +735,7 @@ if x\.len() > 0 {
 	println!("{}", x);
 }
 
-.EE
-."#,
+.EE"#,
             rendered
         )
     }

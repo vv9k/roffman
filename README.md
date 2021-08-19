@@ -10,7 +10,9 @@ A crate to generate roff man pages.
 use roffman::{IntoRoffNode, Roff, Roffable, RoffNode};
 
 fn main() {
-    let roff = Roff::new("roffman", 7).section(
+    let roff = Roff::new("roffman-manual", 7)
+    .date("August 2021")
+    .section(
         "BASIC USAGE",
         vec![
             RoffNode::paragraph(vec![
@@ -38,23 +40,20 @@ impl Roffable for u8 {
     );
 
     let rendered = roff.to_string().unwrap();
-    println!("{}", rendered);
-}
-```
-
-Output:
-
-```roff
+    
+    let output = r#"
 .TH "roffman" "7"
 .
 .SH "BASIC USAGE"
 
 .P
 This is how you create a basic paragraph using roffman\.
-.
+.br
+
 .IP "" 4
 This line should be slightly indented to the \fBright\.\fR
-.And some example \fIcode\fR:
+.br
+And some example \fIcode\fR:
 .EX
 
 impl Roffable for u8 {
@@ -62,8 +61,15 @@ impl Roffable for u8 {
         self\.to_string()\.roff()
     }
 }
-.EE
-.
+.EE"#;
+
+    assert_eq!(rendered.trim(), output.trim());
+}
+```
+
+Output:
+
+```roff
 ```
 
 ## License
