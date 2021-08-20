@@ -39,23 +39,14 @@
 //! let rendered = roff.to_string().unwrap();
 //!
 //! let output = r#"
-//! .TH "roffman" "7" "August 2021"
-//! .
-//!
+//! .TH roffman 7 "August 2021"
 //! .SH "BASIC USAGE"
-//!
 //! .P
 //! This is how you create a basic paragraph using roffman\.
-//! .
-//!
 //! .IP "" 4
 //! This line should be slightly indented to the \fBright\.\fR
-//! .
-//!
 //! .P
 //! And some example \fIcode\fR:
-//! .
-//!
 //! .EX
 //!
 //! impl Roffable for u8 {
@@ -63,7 +54,8 @@
 //!         self\.to_string()\.roff()
 //!     }
 //! }
-//! .EE"#;
+//! .EE
+//! "#;
 //!
 //! assert_eq!(rendered.trim(), output.trim());
 //! ```
@@ -71,7 +63,7 @@
 //!
 //! which will look something like this:
 //! ```text
-//! roffman(7)            Miscellaneous Information Manual           roffman(7)
+//! roffman(7)                      Miscellaneous Information Manual                     roffman(7)
 //!
 //! BASIC USAGE
 //!        This is how you create a basic paragraph using roffman.
@@ -86,7 +78,7 @@
 //!            }
 //!        }
 //!
-//!                                                                  roffman(7)
+//!                                           August 2021                                roffman(7)
 //! ```
 
 use std::error::Error;
