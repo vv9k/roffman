@@ -310,9 +310,7 @@ impl Section {
         if let Some(subtitle) = &self.subtitle {
             writer.write_all(SUB_HEADER)?;
             writer.write_all(SPACE)?;
-            writer.write_all(QUOTE)?;
-            subtitle.render(writer)?;
-            writer.write_all(QUOTE)?;
+            write_quoted_if_whitespace(subtitle, writer)?;
             writer.write_all(ENDL)?;
         }
 
