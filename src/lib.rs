@@ -111,6 +111,9 @@ const NESTED_START: &[u8] = b".RS";
 const NESTED_END: &[u8] = b".RE";
 const EXAMPLE_START: &[u8] = b".EX";
 const EXAMPLE_END: &[u8] = b".EE";
+const SYNOPSIS_START: &[u8] = b".SY";
+const SYNOPSIS_END: &[u8] = b".YS";
+const SYNOPSIS_OPT: &[u8] = b".OP";
 
 #[derive(Debug)]
 /// An error type returned by the functions used in this crate.
@@ -156,6 +159,14 @@ fn write_quoted(roff: &RoffText, writer: &mut impl Write) -> Result<(), RoffErro
     roff.render(writer)?;
     writer.write_all(QUOTE)?;
     Ok(())
+}
+
+fn write_quoted_if_whitespace(roff: &RoffText, writer: &mut impl Write) -> Result<(), RoffError> {
+    if roff.content.as_bytes().iter().any(u8::is_ascii_whitespace) {
+        write_quoted(roff, writer)
+    } else {
+        roff.render(writer)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -216,18 +227,18 @@ impl Roff {
 
     fn write_title(&self, writer: &mut impl Write) -> Result<(), RoffError> {
         writer.write_all(SPACE)?;
-        write_quoted(&self.title, writer)
+        write_quoted_if_whitespace(&self.title, writer)
     }
 
     fn write_section(&self, writer: &mut impl Write) -> Result<(), RoffError> {
         writer.write_all(SPACE)?;
-        write_quoted(&self.section.roff(), writer)
+        write_quoted_if_whitespace(&self.section.roff(), writer)
     }
 
     fn write_date(&self, writer: &mut impl Write) -> Result<(), RoffError> {
         if let Some(date) = &self.date {
             writer.write_all(SPACE)?;
-            write_quoted(date, writer)?;
+            write_quoted_if_whitespace(date, writer)?;
         }
         Ok(())
     }
@@ -288,7 +299,7 @@ impl Section {
         writer.write_all(ENDL)?;
         writer.write_all(SECTION_HEADER)?;
         writer.write_all(SPACE)?;
-        write_quoted(&self.title, writer)?;
+        write_quoted_if_whitespace(&self.title, writer)?;
         writer.write_all(ENDL)?;
         if let Some(subtitle) = &self.subtitle {
             writer.write_all(SUB_HEADER)?;
@@ -439,6 +450,53 @@ impl RoffNode {
             content.into_iter().map(|item| item.roff()).collect(),
         ))
     }
+
+    /// Creates a new synopsis node explaining the given `command` with `description` and `opts`.
+    pub fn synopsis<I, R, O>(command: impl Roffable, description: I, opts: O) -> Self
+    where
+        I: IntoIterator<Item = R>,
+        R: Roffable,
+        O: IntoIterator<Item = SynopsisOpt>,
+    {
+        Self(RoffNodeInner::Synopsis {
+            command: command.roff(),
+            text: description.into_iter().map(|item| item.roff()).collect(),
+            opts: opts.into_iter().collect(),
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SynopsisOpt {
+    name: RoffText,
+    argument: Option<RoffText>,
+    description: Option<Vec<RoffText>>,
+}
+
+impl SynopsisOpt {
+    /// Creates a new option used in a synopsis block.
+    pub fn new<R: Roffable>(name: R) -> Self {
+        Self {
+            name: name.roff(),
+            argument: None,
+            description: None,
+        }
+    }
+
+    pub fn argument<R: Roffable>(mut self, argument: R) -> Self {
+        self.argument = Some(argument.roff());
+        self
+    }
+
+    /// Set the description for this command synopsis.
+    pub fn description<I, R>(mut self, description: I) -> Self
+    where
+        I: IntoIterator<Item = R>,
+        R: Roffable,
+    {
+        self.description = Some(description.into_iter().map(|item| item.roff()).collect());
+        self
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -461,6 +519,11 @@ enum RoffNodeInner {
     },
     /// An example block where text is monospaced.
     Example(Vec<RoffText>),
+    Synopsis {
+        command: RoffText,
+        text: Vec<RoffText>,
+        opts: Vec<SynopsisOpt>,
+    },
 }
 
 impl RoffNodeInner {
@@ -545,6 +608,41 @@ impl RoffNodeInner {
                 }
                 writer.write_all(ENDL)?;
                 writer.write_all(EXAMPLE_END)?;
+            }
+            RoffNodeInner::Synopsis {
+                command,
+                text,
+                opts,
+            } => {
+                writer.write_all(ENDL)?;
+                writer.write_all(SYNOPSIS_START)?;
+                writer.write_all(SPACE)?;
+                write_quoted_if_whitespace(command, writer)?;
+                writer.write_all(ENDL)?;
+                for elem in text {
+                    elem.render(writer)?;
+                }
+                if !text.is_empty() {
+                    writer.write_all(ENDL)?;
+                }
+                for op in opts {
+                    writer.write_all(ENDL)?;
+                    writer.write_all(SYNOPSIS_OPT)?;
+                    writer.write_all(SPACE)?;
+                    write_quoted_if_whitespace(&op.name, writer)?;
+                    if let Some(arg) = &op.argument {
+                        writer.write_all(SPACE)?;
+                        write_quoted_if_whitespace(arg, writer)?;
+                    }
+                    writer.write_all(ENDL)?;
+                    if let Some(description) = &op.description {
+                        for elem in description {
+                            elem.render(writer)?;
+                        }
+                    }
+                    writer.write_all(COMMA)?;
+                }
+                writer.write_all(SYNOPSIS_END)?;
             }
         }
 
@@ -659,7 +757,7 @@ mod tests {
 
         let rendered = roff.to_string().unwrap();
         assert_eq!(
-            r#".TH "test" "1"
+            r#".TH test 1
 .
 
 .SH "test section 1"
@@ -708,7 +806,7 @@ tagged paragraph with some content
 
         let rendered = roff.to_string().unwrap();
         assert_eq!(
-            r#".TH "test" "1"
+            r#".TH test 1
 .
 
 .SH "BASE SECTION"
@@ -756,7 +854,7 @@ back two levels left without roffs
 
         let rendered = roff.to_string().unwrap();
         assert_eq!(
-            r#".TH "test\-examples" "3"
+            r#".TH test\-examples 3
 .
 
 .SH "BASE SECTION"
@@ -782,6 +880,47 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus quis malesuada 
             escape(input),
             "This\\-is\\-some\\-text
 Lorem ipsum dolor sit amet, consectetur adipiscing elit\\. Vivamus quis malesuada eros\\.",
+        )
+    }
+
+    #[test]
+    fn synopsis_works() {
+        let roff = Roff::new("test-synopsis", 7).section(
+            "SYNOPSIS",
+            vec![
+                RoffNode::synopsis("ls", ["lists files in the given".roff(), "path".roff().italic(), ".".roff()],
+                vec![
+                    SynopsisOpt::new("-l").description(["use a long listing format"]),
+                    SynopsisOpt::new("-L, --dereference").description(["when showing file information for a symbolic link, show information for the file the link references rather than for the link itself"]),
+                    SynopsisOpt::new("--block-size").argument("SIZE").description(["with -l, scale sizes by SIZE when printing them"]),
+                ]
+                )
+            ],
+        );
+
+        let rendered = roff.to_string().unwrap();
+        assert_eq!(
+            r#".TH test\-synopsis 7
+.
+
+.SH SYNOPSIS
+
+.SY ls
+lists files in the given\fIpath\fR\.
+
+.OP \-l
+use a long listing format
+.
+
+.OP "\-L, \-\-dereference"
+when showing file information for a symbolic link, show information for the file the link references rather than for the link itself
+.
+
+.OP \-\-block\-size SIZE
+with \-l, scale sizes by SIZE when printing them
+.
+.YS"#,
+            rendered
         )
     }
 }
