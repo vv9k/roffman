@@ -118,6 +118,10 @@ const URL_START: &[u8] = b".UR";
 const URL_END: &[u8] = b".UE";
 const MAIL_START: &[u8] = b".MT";
 const MAIL_END: &[u8] = b".ME";
+const LEFT_QUOTE: &[u8] = b"\\*(lq";
+const RIGHT_QUOTE: &[u8] = b"\\*(rq";
+const REGISTERED_SIGN: &[u8] = b"\\*R";
+const TRADEMARK_SIGN: &[u8] = b"\\*(Tm";
 
 #[derive(Debug)]
 /// An error type returned by the functions used in this crate.
@@ -486,6 +490,26 @@ impl RoffNode {
             address: address.roff(),
         })
     }
+
+    /// Returns a node that will be rendered as a registered sign `®`.
+    pub fn registered_sign() -> Self {
+        Self(RoffNodeInner::RegisteredSign)
+    }
+
+    /// Returns a node that will be rendered as a left quote `“`.
+    pub fn left_quote() -> Self {
+        Self(RoffNodeInner::LeftQuote)
+    }
+
+    /// Returns a node that will be rendered as a right quote `”`.
+    pub fn right_quote() -> Self {
+        Self(RoffNodeInner::RightQuote)
+    }
+
+    /// Returns a node that will be rendered as a trademark sign `™`.
+    pub fn trademark_sign() -> Self {
+        Self(RoffNodeInner::TrademarkSign)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -554,6 +578,10 @@ enum RoffNodeInner {
         name: RoffText,
         address: RoffText,
     },
+    RegisteredSign,
+    LeftQuote,
+    RightQuote,
+    TrademarkSign,
 }
 
 impl RoffNodeInner {
@@ -694,6 +722,10 @@ impl RoffNodeInner {
                 writer.write_all(ENDL)?;
                 writer.write_all(MAIL_END)?;
             }
+            RoffNodeInner::RegisteredSign => writer.write_all(REGISTERED_SIGN)?,
+            RoffNodeInner::LeftQuote => writer.write_all(LEFT_QUOTE)?,
+            RoffNodeInner::RightQuote => writer.write_all(RIGHT_QUOTE)?,
+            RoffNodeInner::TrademarkSign => writer.write_all(TRADEMARK_SIGN)?,
         }
 
         if nested {
@@ -1013,6 +1045,32 @@ docs\.rs
 .MT test@invalid\.domain
 John Test
 .ME"#,
+            rendered
+        )
+    }
+
+    #[test]
+    fn special_strings_work() {
+        let roff = Roff::new("test-strings", 7).section(
+            "STRINGS",
+            vec![
+                RoffNode::left_quote(),
+                RoffNode::text("this is some example quoted text."),
+                RoffNode::right_quote(),
+                RoffNode::text(" "),
+                RoffNode::registered_sign(),
+                RoffNode::text(" roffman"),
+                RoffNode::trademark_sign(),
+            ],
+        );
+
+        let rendered = roff.to_string().unwrap();
+        assert_eq!(
+            r#".TH test\-strings 7
+.
+
+.SH STRINGS
+\*(lqthis is some example quoted text\.\*(rq \*R roffman\*(Tm"#,
             rendered
         )
     }
