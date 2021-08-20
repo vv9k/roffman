@@ -114,6 +114,8 @@ const EXAMPLE_END: &[u8] = b".EE";
 const SYNOPSIS_START: &[u8] = b".SY";
 const SYNOPSIS_END: &[u8] = b".YS";
 const SYNOPSIS_OPT: &[u8] = b".OP";
+const URL_START: &[u8] = b".UR";
+const URL_END: &[u8] = b".UE";
 
 #[derive(Debug)]
 /// An error type returned by the functions used in this crate.
@@ -464,6 +466,15 @@ impl RoffNode {
             opts: opts.into_iter().collect(),
         })
     }
+
+    /// Creates a new URL node that will take the form of `[name](address)` where `name` is the
+    /// visible part of the URL and address is where it points to.
+    pub fn url(name: impl Roffable, address: impl Roffable) -> Self {
+        Self(RoffNodeInner::Url {
+            name: name.roff(),
+            address: address.roff(),
+        })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -523,6 +534,10 @@ enum RoffNodeInner {
         command: RoffText,
         text: Vec<RoffText>,
         opts: Vec<SynopsisOpt>,
+    },
+    Url {
+        name: RoffText,
+        address: RoffText,
     },
 }
 
@@ -643,6 +658,16 @@ impl RoffNodeInner {
                     writer.write_all(COMMA)?;
                 }
                 writer.write_all(SYNOPSIS_END)?;
+            }
+            RoffNodeInner::Url { address, name } => {
+                writer.write_all(ENDL)?;
+                writer.write_all(URL_START)?;
+                writer.write_all(SPACE)?;
+                address.render(writer)?;
+                writer.write_all(ENDL)?;
+                name.render(writer)?;
+                writer.write_all(ENDL)?;
+                writer.write_all(URL_END)?;
             }
         }
 
@@ -920,6 +945,41 @@ when showing file information for a symbolic link, show information for the file
 with \-l, scale sizes by SIZE when printing them
 .
 .YS"#,
+            rendered
+        )
+    }
+
+    #[test]
+    fn urls_work() {
+        let roff = Roff::new("test-urls", 7).section(
+            "URLS",
+            vec![
+                RoffNode::url("GitHub", "https://github.com/vv9k/roffman"),
+                RoffNode::text("\n"),
+                RoffNode::url("crates.io", "https://crates.io/crates/roffman"),
+                RoffNode::text("\n"),
+                RoffNode::url("docs.rs", "https://docs.rs/roffman"),
+            ],
+        );
+
+        let rendered = roff.to_string().unwrap();
+        assert_eq!(
+            r#".TH test\-urls 7
+.
+
+.SH URLS
+
+.UR https://github\.com/vv9k/roffman
+GitHub
+.UE
+
+.UR https://crates\.io/crates/roffman
+crates\.io
+.UE
+
+.UR https://docs\.rs/roffman
+docs\.rs
+.UE"#,
             rendered
         )
     }
