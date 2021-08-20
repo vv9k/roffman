@@ -116,6 +116,8 @@ const SYNOPSIS_END: &[u8] = b".YS";
 const SYNOPSIS_OPT: &[u8] = b".OP";
 const URL_START: &[u8] = b".UR";
 const URL_END: &[u8] = b".UE";
+const MAIL_START: &[u8] = b".MT";
+const MAIL_END: &[u8] = b".ME";
 
 #[derive(Debug)]
 /// An error type returned by the functions used in this crate.
@@ -475,6 +477,15 @@ impl RoffNode {
             address: address.roff(),
         })
     }
+
+    /// Creates a new email node that will where `address` is the email address and `name` is the
+    /// visible URL text. `address` may not be visible if the man page is being viewed as HTML.
+    pub fn email(name: impl Roffable, address: impl Roffable) -> Self {
+        Self(RoffNodeInner::Email {
+            name: name.roff(),
+            address: address.roff(),
+        })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -536,6 +547,10 @@ enum RoffNodeInner {
         opts: Vec<SynopsisOpt>,
     },
     Url {
+        name: RoffText,
+        address: RoffText,
+    },
+    Email {
         name: RoffText,
         address: RoffText,
     },
@@ -668,6 +683,16 @@ impl RoffNodeInner {
                 name.render(writer)?;
                 writer.write_all(ENDL)?;
                 writer.write_all(URL_END)?;
+            }
+            RoffNodeInner::Email { address, name } => {
+                writer.write_all(ENDL)?;
+                writer.write_all(MAIL_START)?;
+                writer.write_all(SPACE)?;
+                address.render(writer)?;
+                writer.write_all(ENDL)?;
+                name.render(writer)?;
+                writer.write_all(ENDL)?;
+                writer.write_all(MAIL_END)?;
             }
         }
 
@@ -950,7 +975,7 @@ with \-l, scale sizes by SIZE when printing them
     }
 
     #[test]
-    fn urls_work() {
+    fn urls_and_emails_work() {
         let roff = Roff::new("test-urls", 7).section(
             "URLS",
             vec![
@@ -959,6 +984,9 @@ with \-l, scale sizes by SIZE when printing them
                 RoffNode::url("crates.io", "https://crates.io/crates/roffman"),
                 RoffNode::text("\n"),
                 RoffNode::url("docs.rs", "https://docs.rs/roffman"),
+                RoffNode::text("\n"),
+                RoffNode::text("\n"),
+                RoffNode::email("John Test", "test@invalid.domain"),
             ],
         );
 
@@ -979,7 +1007,12 @@ crates\.io
 
 .UR https://docs\.rs/roffman
 docs\.rs
-.UE"#,
+.UE
+
+
+.MT test@invalid\.domain
+John Test
+.ME"#,
             rendered
         )
     }
