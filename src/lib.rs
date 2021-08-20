@@ -3,9 +3,9 @@
 //!
 //! ## Example usage
 //! ```
-//! use roffman::{IntoRoffNode, Roff, Roffable, RoffNode};
+//! use roffman::{IntoRoffNode, Roff, Roffable, RoffNode, SectionNumber};
 //!
-//! let roff = Roff::new("roffman", 7)
+//! let roff = Roff::new("roffman", SectionNumber::Miscellaneous)
 //!     .date("August 2021")
 //!     .section(
 //!        "BASIC USAGE",
@@ -182,13 +182,13 @@ fn write_quoted_if_whitespace(roff: &RoffText, writer: &mut impl Write) -> Resul
 pub struct Roff {
     title: RoffText,
     date: Option<RoffText>,
-    section: u8,
+    section: SectionNumber,
     sections: Vec<Section>,
 }
 
 impl Roff {
     /// Create a new `Roff` with a `title` and a `section`.
-    pub fn new(title: impl Roffable, section: u8) -> Self {
+    pub fn new(title: impl Roffable, section: SectionNumber) -> Self {
         Self {
             title: title.roff(),
             date: None,
@@ -268,6 +268,53 @@ impl Roff {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+/// Defines the section to which the given ROFF belongs.
+pub enum SectionNumber {
+    ///Commands that can be executed by the user from within a shell.
+    UserCommands,
+    /// Functions which wrap operations performed by the kernel.
+    SystemCalls,
+    /// All library functions excluding the system call wrappers (Most of the libc functions).
+    LibraryCalls,
+    /// Files found in `/dev` which allow to access to devices through the kernel.
+    Devices,
+    /// Describes various human-readable file formats and configuration files.
+    FileFormatsAndConfigurationFiles,
+    /// Games and funny little programs available on the system.
+    Games,
+    /// Overviews or descriptions of various topics, conventions, and protocols, character set
+    /// standards, the standard filesystem layout, and miscellaneous other things.
+    Miscellaneous,
+    /// Commands like `mount(8)`, many of which only root can execute.
+    SystemManagementCommands,
+    /// A custom section number.
+    Custom(u8),
+}
+
+impl From<SectionNumber> for u8 {
+    fn from(s: SectionNumber) -> Self {
+        use SectionNumber::*;
+        match s {
+            UserCommands => 1,
+            SystemCalls => 2,
+            LibraryCalls => 3,
+            Devices => 4,
+            FileFormatsAndConfigurationFiles => 5,
+            Games => 6,
+            Miscellaneous => 7,
+            SystemManagementCommands => 8,
+            Custom(n) => n,
+        }
+    }
+}
+
+impl Roffable for SectionNumber {
+    fn roff(&self) -> RoffText {
+        u8::from(*self).roff()
     }
 }
 
@@ -839,7 +886,7 @@ mod tests {
 
     #[test]
     fn it_roffs() {
-        let roff = Roff::new("test", 1)
+        let roff = Roff::new("test", SectionNumber::UserCommands)
             .section(
                 "test section 1",
                 vec![RoffNode::paragraph(vec![
@@ -887,7 +934,7 @@ tagged paragraph with some content
 
     #[test]
     fn it_nests_roffs() {
-        let roff = Roff::new("test", 1).add_section(
+        let roff = Roff::new("test", SectionNumber::UserCommands).add_section(
             Section::new(
                 "BASE SECTION",
                 vec![
@@ -932,7 +979,7 @@ back two levels left without roffs
 
     #[test]
     fn it_roffs_examples() {
-        let roff = Roff::new("test-examples", 3).section(
+        let roff = Roff::new("test-examples", SectionNumber::LibraryCalls).section(
             "BASE SECTION",
             vec![
                 RoffNode::text("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus quis malesuada eros."),
@@ -978,7 +1025,7 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit\\. Vivamus quis malesuad
 
     #[test]
     fn synopsis_works() {
-        let roff = Roff::new("test-synopsis", 7).section(
+        let roff = Roff::new("test-synopsis", SectionNumber::Miscellaneous).section(
             "SYNOPSIS",
             vec![
                 RoffNode::synopsis("ls", ["lists files in the given".roff(), "path".roff().italic(), ".".roff()],
@@ -1014,7 +1061,7 @@ with \-l, scale sizes by SIZE when printing them
 
     #[test]
     fn urls_and_emails_work() {
-        let roff = Roff::new("test-urls", 7).section(
+        let roff = Roff::new("test-urls", SectionNumber::Miscellaneous).section(
             "URLS",
             vec![
                 RoffNode::url("GitHub", "https://github.com/vv9k/roffman"),
@@ -1047,7 +1094,7 @@ John Test
 
     #[test]
     fn special_strings_work() {
-        let roff = Roff::new("test-strings", 7).section(
+        let roff = Roff::new("test-strings", SectionNumber::Miscellaneous).section(
             "STRINGS",
             vec![
                 RoffNode::left_quote(),
