@@ -94,7 +94,6 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::io::{self, Write};
 
-const COMMA: &[u8] = b"\n.\n";
 const SPACE: &[u8] = b" ";
 const QUOTE: &[u8] = b"\"";
 const ENDL: &[u8] = b"\n";
@@ -256,7 +255,7 @@ impl Roff {
         self.write_title(writer)?;
         self.write_section(writer)?;
         self.write_date(writer)?;
-        writer.write_all(COMMA)?;
+        writer.write_all(ENDL)?;
         Ok(())
     }
 
@@ -304,7 +303,6 @@ impl Section {
     }
 
     fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
-        writer.write_all(ENDL)?;
         writer.write_all(SECTION_HEADER)?;
         writer.write_all(SPACE)?;
         write_quoted_if_whitespace(&self.title, writer)?;
@@ -318,8 +316,10 @@ impl Section {
             writer.write_all(ENDL)?;
         }
 
+        let mut was_text = false;
         for node in &self.nodes {
-            node.render(writer, false)?;
+            node.render(writer, false, was_text)?;
+            was_text = node.is_text();
         }
 
         Ok(())
@@ -597,7 +597,12 @@ impl RoffNodeInner {
         !self.is_text()
     }
 
-    fn render<W: Write>(&self, writer: &mut W, nested: bool) -> Result<(), RoffError> {
+    fn render<W: Write>(
+        &self,
+        writer: &mut W,
+        nested: bool,
+        was_text: bool,
+    ) -> Result<(), RoffError> {
         if nested {
             writer.write_all(ENDL)?;
             writer.write_all(NESTED_START)?;
@@ -622,46 +627,60 @@ impl RoffNodeInner {
                 }
             }
             RoffNodeInner::Paragraph(content) => {
-                writer.write_all(ENDL)?;
+                if was_text {
+                    writer.write_all(ENDL)?;
+                }
                 writer.write_all(PARAGRAPH)?;
                 writer.write_all(ENDL)?;
+                let mut was_text_node = false;
                 for node in content {
-                    node.render(writer, node.is_nestable())?;
+                    node.render(writer, node.is_nestable(), was_text_node)?;
+                    was_text_node = node.is_text();
                 }
-                writer.write_all(COMMA)?;
+                writer.write_all(ENDL)?;
             }
             RoffNodeInner::IndentedParagraph {
                 content,
                 indentation,
             } => {
-                writer.write_all(ENDL)?;
+                if was_text {
+                    writer.write_all(ENDL)?;
+                }
                 writer.write_all(INDENTED_PARAGRAPH)?;
                 if let Some(indentation) = indentation {
                     writer.write_all(format!(" \"\" {}", indentation).as_bytes())?;
                 }
                 writer.write_all(ENDL)?;
+                let mut was_text_node = false;
                 for node in content {
-                    node.render(writer, node.is_nestable())?;
+                    node.render(writer, node.is_nestable(), was_text_node)?;
+                    was_text_node = node.is_text();
                 }
-                writer.write_all(COMMA)?;
+                writer.write_all(ENDL)?;
             }
             RoffNodeInner::TaggedParagraph {
                 content,
                 title: tag,
             } => {
-                writer.write_all(ENDL)?;
+                if was_text {
+                    writer.write_all(ENDL)?;
+                }
                 writer.write_all(TAGGED_PARAGRAPH)?;
                 writer.write_all(ENDL)?;
                 tag.render(writer)?;
                 writer.write_all(ENDL)?;
 
+                let mut was_text_node = false;
                 for node in content {
-                    node.render(writer, node.is_nestable())?;
+                    node.render(writer, node.is_nestable(), was_text_node)?;
+                    was_text_node = node.is_text();
                 }
-                writer.write_all(COMMA)?;
+                writer.write_all(ENDL)?;
             }
             RoffNodeInner::Example(content) => {
-                writer.write_all(ENDL)?;
+                if was_text {
+                    writer.write_all(ENDL)?;
+                }
                 writer.write_all(EXAMPLE_START)?;
                 writer.write_all(ENDL)?;
                 for node in content {
@@ -669,13 +688,16 @@ impl RoffNodeInner {
                 }
                 writer.write_all(ENDL)?;
                 writer.write_all(EXAMPLE_END)?;
+                writer.write_all(ENDL)?;
             }
             RoffNodeInner::Synopsis {
                 command,
                 text,
                 opts,
             } => {
-                writer.write_all(ENDL)?;
+                if was_text {
+                    writer.write_all(ENDL)?;
+                }
                 writer.write_all(SYNOPSIS_START)?;
                 writer.write_all(SPACE)?;
                 write_quoted_if_whitespace(command, writer)?;
@@ -701,12 +723,15 @@ impl RoffNodeInner {
                             elem.render(writer)?;
                         }
                     }
-                    writer.write_all(COMMA)?;
+                    writer.write_all(ENDL)?;
                 }
                 writer.write_all(SYNOPSIS_END)?;
+                writer.write_all(ENDL)?;
             }
             RoffNodeInner::Url { address, name } => {
-                writer.write_all(ENDL)?;
+                if was_text {
+                    writer.write_all(ENDL)?;
+                }
                 writer.write_all(URL_START)?;
                 writer.write_all(SPACE)?;
                 address.render(writer)?;
@@ -714,9 +739,12 @@ impl RoffNodeInner {
                 name.render(writer)?;
                 writer.write_all(ENDL)?;
                 writer.write_all(URL_END)?;
+                writer.write_all(ENDL)?;
             }
             RoffNodeInner::Email { address, name } => {
-                writer.write_all(ENDL)?;
+                if was_text {
+                    writer.write_all(ENDL)?;
+                }
                 writer.write_all(MAIL_START)?;
                 writer.write_all(SPACE)?;
                 address.render(writer)?;
@@ -724,6 +752,7 @@ impl RoffNodeInner {
                 name.render(writer)?;
                 writer.write_all(ENDL)?;
                 writer.write_all(MAIL_END)?;
+                writer.write_all(ENDL)?;
             }
             RoffNodeInner::RegisteredSign => writer.write_all(REGISTERED_SIGN)?,
             RoffNodeInner::LeftQuote => writer.write_all(LEFT_QUOTE)?,
@@ -843,26 +872,16 @@ mod tests {
         let rendered = roff.to_string().unwrap();
         assert_eq!(
             r#".TH test 1
-.
-
 .SH "test section 1"
-
 .P
 this is some very \fBspecial\fR text
-.
-
 .SH "test section 2"
-
 .IP "" 4
 \fILorem ipsum\fR dolor sit amet, consectetur adipiscing elit\. Vivamus quis malesuada eros\.
-.
-
 .SH "test section 3"
-
 .TP
 \fBparagraph title\fR
 tagged paragraph with some content
-.
 "#,
             rendered
         )
@@ -892,11 +911,8 @@ tagged paragraph with some content
         let rendered = roff.to_string().unwrap();
         assert_eq!(
             r#".TH test 1
-.
-
 .SH "BASE SECTION"
 .SS "with some subtitle\.\.\."
-
 .P
 some text in first paragraph\.
 .RS
@@ -905,17 +921,12 @@ some nested paragraph
 .RS
 .P
 some doubly nested paragraph
-.
 
 .RE
-.
 
 .RE
-.
-
 .P
 back two levels left without roffs
-.
 "#,
             rendered
         )
@@ -940,8 +951,6 @@ back two levels left without roffs
         let rendered = roff.to_string().unwrap();
         assert_eq!(
             r#".TH test\-examples 3
-.
-
 .SH "BASE SECTION"
 Lorem ipsum dolor sit amet, consectetur adipiscing elit\. Vivamus quis malesuada eros\.
 .EX
@@ -951,7 +960,8 @@ if x\.len() > 0 {
 	println!("{}", x);
 }
 
-.EE"#,
+.EE
+"#,
             rendered
         )
     }
@@ -986,25 +996,20 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit\\. Vivamus quis malesuad
         let rendered = roff.to_string().unwrap();
         assert_eq!(
             r#".TH test\-synopsis 7
-.
-
 .SH SYNOPSIS
-
 .SY ls
 lists files in the given\fIpath\fR\.
 
 .OP \-l
 use a long listing format
-.
 
 .OP "\-L, \-\-dereference"
 when showing file information for a symbolic link, show information for the file the link references rather than for the link itself
-.
 
 .OP \-\-block\-size SIZE
 with \-l, scale sizes by SIZE when printing them
-.
-.YS"#,
+.YS
+"#,
             rendered
         )
     }
@@ -1015,12 +1020,8 @@ with \-l, scale sizes by SIZE when printing them
             "URLS",
             vec![
                 RoffNode::url("GitHub", "https://github.com/vv9k/roffman"),
-                RoffNode::text("\n"),
                 RoffNode::url("crates.io", "https://crates.io/crates/roffman"),
-                RoffNode::text("\n"),
                 RoffNode::url("docs.rs", "https://docs.rs/roffman"),
-                RoffNode::text("\n"),
-                RoffNode::text("\n"),
                 RoffNode::email("John Test", "test@invalid.domain"),
             ],
         );
@@ -1028,26 +1029,20 @@ with \-l, scale sizes by SIZE when printing them
         let rendered = roff.to_string().unwrap();
         assert_eq!(
             r#".TH test\-urls 7
-.
-
 .SH URLS
-
 .UR https://github\.com/vv9k/roffman
 GitHub
 .UE
-
 .UR https://crates\.io/crates/roffman
 crates\.io
 .UE
-
 .UR https://docs\.rs/roffman
 docs\.rs
 .UE
-
-
 .MT test@invalid\.domain
 John Test
-.ME"#,
+.ME
+"#,
             rendered
         )
     }
@@ -1070,8 +1065,6 @@ John Test
         let rendered = roff.to_string().unwrap();
         assert_eq!(
             r#".TH test\-strings 7
-.
-
 .SH STRINGS
 \*(lqthis is some example quoted text\.\*(rq \*R roffman\*(Tm"#,
             rendered
