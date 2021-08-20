@@ -326,15 +326,15 @@ impl Section {
 
 #[derive(Copy, Clone, Debug)]
 /// Style that can be applied to [`RoffText`](RoffText)
-pub enum Style {
+pub enum FontStyle {
     Bold,
     Italic,
-    Normal,
+    Roman,
 }
 
-impl Default for Style {
+impl Default for FontStyle {
     fn default() -> Self {
-        Style::Normal
+        FontStyle::Roman
     }
 }
 
@@ -342,11 +342,11 @@ impl Default for Style {
 /// Wrapper type for styled text in ROFF.
 pub struct RoffText {
     content: String,
-    style: Style,
+    style: FontStyle,
 }
 
 impl RoffText {
-    pub fn new<C: AsRef<str>>(content: C, style: Option<Style>) -> Self {
+    pub fn new<C: AsRef<str>>(content: C, style: Option<FontStyle>) -> Self {
         Self {
             content: escape(content),
             style: style.unwrap_or_default(),
@@ -355,27 +355,27 @@ impl RoffText {
 
     /// Set the style of this text to bold.
     pub fn bold(mut self) -> Self {
-        self.style = Style::Bold;
+        self.style = FontStyle::Bold;
         self
     }
 
     /// Set the style of this text to italic.
     pub fn italic(mut self) -> Self {
-        self.style = Style::Italic;
+        self.style = FontStyle::Italic;
         self
     }
 
     fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
         let styled = match self.style {
-            Style::Bold => {
+            FontStyle::Bold => {
                 writer.write_all(BOLD)?;
                 true
             }
-            Style::Italic => {
+            FontStyle::Italic => {
                 writer.write_all(ITALIC)?;
                 true
             }
-            Style::Normal => false,
+            FontStyle::Roman => false,
         };
 
         writer.write_all(self.content.as_bytes())?;
@@ -608,15 +608,15 @@ impl RoffNodeInner {
         match self {
             RoffNodeInner::Text(text) => {
                 let styled = match text.style {
-                    Style::Bold => {
+                    FontStyle::Bold => {
                         writer.write_all(BOLD)?;
                         true
                     }
-                    Style::Italic => {
+                    FontStyle::Italic => {
                         writer.write_all(ITALIC)?;
                         true
                     }
-                    Style::Normal => false,
+                    FontStyle::Roman => false,
                 };
 
                 writer.write_all(text.content.as_bytes())?;
