@@ -399,6 +399,7 @@ impl RoffNode {
         self.0
     }
 
+    /// Creates a simple text node.
     pub fn text(content: impl Roffable) -> Self {
         Self(RoffNodeInner::Text(content.roff()))
     }
@@ -448,7 +449,7 @@ impl RoffNode {
         })
     }
 
-    /// Creates a new example node.
+    /// Creates a new example node. An example block usually has the font set to monospaced.
     pub fn example<I, R>(content: I) -> Self
     where
         I: IntoIterator<Item = R>,
@@ -513,6 +514,7 @@ impl RoffNode {
 }
 
 #[derive(Clone, Debug)]
+/// An option used by the [`RoffNode::synopsis`](RoffNode::synopsis) block.
 pub struct SynopsisOpt {
     name: RoffText,
     argument: Option<RoffText>,
@@ -529,6 +531,7 @@ impl SynopsisOpt {
         }
     }
 
+    /// Set the name of the argument that this option takes.
     pub fn argument<R: Roffable>(mut self, argument: R) -> Self {
         self.argument = Some(argument.roff());
         self
