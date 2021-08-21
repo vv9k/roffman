@@ -5,52 +5,50 @@
 //! ```
 //! use roffman::{Roff, RoffNode, Roffable, SectionNumber, SynopsisOpt};
 //!
-//! fn main() {
-//!     let roff = Roff::new("roffman", SectionNumber::Miscellaneous)
-//!     .date("August 2021")
-//!     .section(
-//!        "BASIC USAGE",
-//!        [
-//!            RoffNode::paragraph([
-//!                "This is how you create a basic paragraph using roffman.",
-//!            ]),
-//!            RoffNode::indented_paragraph(
-//!                [
-//!                    "This line should be slightly indented to the ".roff(),
-//!                    "right.".roff().bold(),
-//!                ],
-//!                Some(4),
-//!            ),
-//!            RoffNode::synopsis(
-//!                     "roffman-command",
-//!                     [
-//!                     "This is the description of this command. It will be displayed right next to".roff(),
+//! let roff = Roff::new("roffman", SectionNumber::Miscellaneous)
+//! .date("August 2021")
+//! .section(
+//!    "BASIC USAGE",
+//!    [
+//!        RoffNode::paragraph([
+//!            "This is how you create a basic paragraph using roffman.",
+//!        ]),
+//!        RoffNode::indented_paragraph(
+//!            [
+//!                "This line should be slightly indented to the ".roff(),
+//!                "right.".roff().bold(),
+//!            ],
+//!            Some(4),
+//!        ),
+//!        RoffNode::synopsis(
+//!                 "roffman-command",
+//!                 [
+//!                 "This is the description of this command. It will be displayed right next to".roff(),
 //! " it".roff().italic()
 //! ]                     ,
-//!                     [
-//!                     SynopsisOpt::new("--opt").description(["some simple opt"]),
-//!                     SynopsisOpt::new("--opt-with-arg").argument("ARG").description(["opt with an argument"]),
-//!                     SynopsisOpt::new("--bold")
-//!            ]),
-//!            RoffNode::paragraph(["Example:".roff().bold()]),
-//!            RoffNode::example([
-//!                r#"
+//!                 [
+//!                 SynopsisOpt::new("--opt").description(["some simple opt"]),
+//!                 SynopsisOpt::new("--opt-with-arg").argument("ARG").description(["opt with an argument"]),
+//!                 SynopsisOpt::new("--bold")
+//!        ]),
+//!        RoffNode::paragraph(["Example:".roff().bold()]),
+//!        RoffNode::example([
+//!             r#"
 //! impl Roffable for u8 {
 //!     fn roff(&self) -> RoffText {
 //!         self.to_string().roff()
 //!     }
 //! }"#,
-//!             ]),
-//!            RoffNode::url("GitHub", "https://github.com/vv9k/roffman"),
-//!            RoffNode::text("\nvv9k"),
-//!            RoffNode::trademark_sign(),
-//!         ],
-//!     );
+//!         ]),
+//!        RoffNode::url("GitHub", "https://github.com/vv9k/roffman"),
+//!        RoffNode::text("\nvv9k"),
+//!        RoffNode::trademark_sign(),
+//!     ],
+//! );
 //!
-//!     let rendered = roff.to_string().unwrap();
-//!     println!("{}", rendered);
+//! let rendered = roff.to_string().unwrap();
 //!
-//!     let output = r#".TH roffman 7 "August 2021"
+//! let output = r#".TH roffman 7 "August 2021"
 //! .SH "BASIC USAGE"
 //! .P
 //! This is how you create a basic paragraph using roffman\.
@@ -85,8 +83,7 @@
 //! vv9k\*(Tm
 //! "#;
 //!
-//!     assert_eq!(rendered.trim(), output.trim());
-//! }
+//! assert_eq!(rendered.trim(), output.trim());
 //! ```
 //!
 //! which will look something like this:
@@ -882,7 +879,7 @@ impl Roffable for String {
 
 impl Roffable for &String {
     fn roff(&self) -> RoffText {
-        RoffText::new(self.clone(), None)
+        RoffText::new((*self).clone(), None)
     }
 }
 
