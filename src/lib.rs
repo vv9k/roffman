@@ -263,7 +263,7 @@ impl Roff {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 /// Defines the section to which the given ROFF belongs.
 pub enum SectionNumber {
     ///Commands that can be executed by the user from within a shell.
@@ -363,7 +363,7 @@ impl Section {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 /// Style that can be applied to [`RoffText`](RoffText)
 pub enum FontStyle {
     Bold,
@@ -377,7 +377,7 @@ impl Default for FontStyle {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 /// Wrapper type for styled text in ROFF.
 pub struct RoffText {
     content: String,
