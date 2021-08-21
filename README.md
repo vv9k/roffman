@@ -12,7 +12,7 @@ A crate to generate roff man pages.
 Add the following to the `Cargo.toml`:
 ```toml
 [dependencies]
-roffman = "0.1"
+roffman = "0.2"
 ```
 
 ## Example
