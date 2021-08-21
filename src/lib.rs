@@ -824,21 +824,9 @@ impl IntoRoffNode for RoffNode {
     }
 }
 
-impl IntoRoffNode for RoffText {
+impl<R: Roffable> IntoRoffNode for R {
     fn into_roff(self) -> RoffNode {
-        RoffNode::text(self)
-    }
-}
-
-impl IntoRoffNode for &str {
-    fn into_roff(self) -> RoffNode {
-        self.roff().into_roff()
-    }
-}
-
-impl IntoRoffNode for String {
-    fn into_roff(self) -> RoffNode {
-        self.roff().into_roff()
+        RoffNode::text(self.roff())
     }
 }
 
@@ -854,9 +842,21 @@ impl Roffable for String {
     }
 }
 
+impl Roffable for &String {
+    fn roff(&self) -> RoffText {
+        RoffText::new(self.clone(), None)
+    }
+}
+
 impl Roffable for &str {
     fn roff(&self) -> RoffText {
-        self.to_string().roff()
+        RoffText::new(self.to_string(), None)
+    }
+}
+
+impl Roffable for &&str {
+    fn roff(&self) -> RoffText {
+        (*self).roff()
     }
 }
 
@@ -868,7 +868,7 @@ impl Roffable for RoffText {
 
 impl Roffable for u8 {
     fn roff(&self) -> RoffText {
-        self.to_string().roff()
+        RoffText::new(self.to_string(), None)
     }
 }
 
