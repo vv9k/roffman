@@ -1,6 +1,8 @@
 # roffman
 
 [![Build Status](https://github.com/vv9k/roffman/workflows/CI/badge.svg)](https://github.com/vv9k/roffman/actions?query=workflow%3A%22CI%22)
+[![Docs](https://docs.rs/roffman/badge.svg)](https://docs.rs/roffman)
+
 
 
 A crate to generate roff man pages.
