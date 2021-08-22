@@ -55,7 +55,7 @@
 //! .IP "" 4
 //! This line should be slightly indented to the \fBright\.\fR
 //! .SY roffman\-command
-//! This is the description of this command\. It will be displayed right next to \fIit\fR
+//! This is the description of this command\. It will be displayed right next to\fI it\fR
 //!
 //! .OP \-\-opt
 //! some simple opt
