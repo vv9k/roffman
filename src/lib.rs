@@ -895,6 +895,12 @@ impl Roffable for &&str {
     }
 }
 
+impl Roffable for std::borrow::Cow<'_, str> {
+    fn roff(&self) -> RoffText {
+        self.as_ref().roff()
+    }
+}
+
 impl Roffable for RoffText {
     fn roff(&self) -> RoffText {
         self.clone()
