@@ -34,6 +34,7 @@ fn main() {
                    "right.".roff().bold(),
                ],
                Some(4),
+               Some("optional-title")
            ),
            RoffNode::synopsis(
                     "roffman-command",
@@ -74,7 +75,7 @@ Output:
 .SH "BASIC USAGE"
 .P
 This is how you create a basic paragraph using roffman\.
-.IP "" 4
+.IP optional\-title 4
 This line should be slightly indented to the \fBright\.\fR
 .SY roffman\-command
 This is the description of this command\. It will be displayed right next to \fIit\fR

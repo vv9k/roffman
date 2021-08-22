@@ -19,6 +19,7 @@
 //!                "right.".roff().bold(),
 //!            ],
 //!            Some(4),
+//!            Some("optional-title")
 //!        ),
 //!        RoffNode::synopsis(
 //!                 "roffman-command",
@@ -52,7 +53,7 @@
 //! .SH "BASIC USAGE"
 //! .P
 //! This is how you create a basic paragraph using roffman\.
-//! .IP "" 4
+//! .IP optional\-title 4
 //! This line should be slightly indented to the \fBright\.\fR
 //! .SY roffman\-command
 //! This is the description of this command\. It will be displayed right next to\fI it\fR
@@ -495,7 +496,11 @@ impl RoffNode {
     }
 
     /// Creates a new indented paragraph node.
-    pub fn indented_paragraph<I, R>(content: I, indentation: Option<u8>) -> Self
+    pub fn indented_paragraph<I, R>(
+        content: I,
+        indentation: Option<u8>,
+        title: Option<impl Roffable>,
+    ) -> Self
     where
         I: IntoIterator<Item = R>,
         R: IntoRoffNode,
@@ -506,15 +511,15 @@ impl RoffNode {
                 .map(|item| item.into_roff().into_inner())
                 .collect(),
             indentation,
+            title: title.map(|t| t.roff()),
         })
     }
 
     /// Creates a new paragraph node with a title.
-    pub fn tagged_paragraph<I, R, T>(content: I, title: T) -> Self
+    pub fn tagged_paragraph<I, R>(content: I, title: impl Roffable) -> Self
     where
         I: IntoIterator<Item = R>,
         R: IntoRoffNode,
-        T: Roffable,
     {
         Self(RoffNodeInner::TaggedParagraph {
             content: content
@@ -636,6 +641,7 @@ enum RoffNodeInner {
     IndentedParagraph {
         content: Vec<RoffNodeInner>,
         indentation: Option<u8>,
+        title: Option<RoffText>,
     },
     /// Paragraph with a title.
     TaggedParagraph {
@@ -718,13 +724,22 @@ impl RoffNodeInner {
             RoffNodeInner::IndentedParagraph {
                 content,
                 indentation,
+                title,
             } => {
                 if was_text {
                     writer.write_all(ENDL)?;
                 }
                 writer.write_all(INDENTED_PARAGRAPH)?;
                 if let Some(indentation) = indentation {
-                    writer.write_all(format!(" \"\" {}", indentation).as_bytes())?;
+                    writer.write_all(SPACE)?;
+                    if let Some(title) = title {
+                        write_quoted_if_whitespace(title, writer)?;
+                    } else {
+                        writer.write_all(QUOTE)?;
+                        writer.write_all(QUOTE)?;
+                    }
+                    writer.write_all(SPACE)?;
+                    indentation.roff().render(writer)?;
                 }
                 writer.write_all(ENDL)?;
                 let mut was_text_node = false;
@@ -926,7 +941,7 @@ mod tests {
         let roff = Roff::new("test", SectionNumber::UserCommands)
             .section(
                 "test section 1",
-                vec![RoffNode::paragraph(vec![
+                [RoffNode::paragraph([
                     "this is some very ".roff(),
                     "special".roff().bold(),
                     " text".roff(),
@@ -934,22 +949,43 @@ mod tests {
             )
             .section(
                 "test section 2",
-                vec![RoffNode::indented_paragraph(
-                    vec![
+                [RoffNode::indented_paragraph(
+                    [
                         "Lorem ipsum".roff().italic(),
                         " dolor sit amet, consectetur adipiscing elit. Vivamus quis malesuada eros.".roff()
                             .roff(),
                     ],
                     Some(4),
+                    None::<&str>
                 )],
             )
             .section(
                 "test section 3",
-                vec![RoffNode::tagged_paragraph(
-                    vec!["tagged paragraph with some content".roff()],
+                [RoffNode::tagged_paragraph(
+                    ["tagged paragraph with some content".roff()],
                     "paragraph title".roff().bold(),
                 )],
-            );
+            )
+            .section(
+                "test section 4",
+                [
+                RoffNode::indented_paragraph(
+                    [
+                        "Indented paragraph with a title",
+                    ],
+                    Some(4),
+                    Some("Paragraph title with spaces")
+                ),
+                RoffNode::indented_paragraph(
+                    [
+                        "Another indented paragraph",
+                    ],
+                    Some(2),
+                    Some("title-no-spaces")
+                )
+                ],
+            )
+            ;
 
         let rendered = roff.to_string().unwrap();
         assert_eq!(
@@ -964,6 +1000,11 @@ this is some very \fBspecial\fR text
 .TP
 \fBparagraph title\fR
 tagged paragraph with some content
+.SH "test section 4"
+.IP "Paragraph title with spaces" 4
+Indented paragraph with a title
+.IP title\-no\-spaces 2
+Another indented paragraph
 "#,
             rendered
         )
