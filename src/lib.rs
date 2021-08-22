@@ -290,8 +290,9 @@ impl Roff {
     pub fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
         self.write_title_header(writer)?;
 
+        let mut was_text = false;
         for section in &self.sections {
-            section.render(writer)?;
+            was_text = section.render(writer, was_text)?;
         }
 
         Ok(())
@@ -376,7 +377,10 @@ impl Section {
         self
     }
 
-    fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
+    fn render<W: Write>(&self, writer: &mut W, was_text: bool) -> Result<bool, RoffError> {
+        if was_text {
+            writer.write_all(ENDL)?;
+        }
         writer.write_all(SECTION_HEADER)?;
         writer.write_all(SPACE)?;
         write_quoted_if_whitespace(&self.title, writer)?;
@@ -394,7 +398,7 @@ impl Section {
             was_text = node.is_text();
         }
 
-        Ok(())
+        Ok(was_text)
     }
 }
 
@@ -1145,6 +1149,35 @@ John Test
             r#".TH test\-strings 7
 .SH STRINGS
 \*(lqthis is some example quoted text\.\*(rq \*R roffman\*(Tm"#,
+            rendered
+        )
+    }
+
+    #[test]
+    fn section_after_text_renders() {
+        let roff = Roff::new("test-sections", SectionNumber::Miscellaneous)
+            .section("TEXTS", vec![RoffNode::text("this is some example text.")])
+            .section(
+                "NEXT",
+                vec![
+                    RoffNode::text("this is some example text on second section.\n"),
+                    RoffNode::text("this is some example.\n"),
+                    RoffNode::text("this is some example text."),
+                ],
+            )
+            .section("THIRD", vec![RoffNode::text("this is some example text.")]);
+
+        let rendered = roff.to_string().unwrap();
+        assert_eq!(
+            r#".TH test\-sections 7
+.SH TEXTS
+this is some example text\.
+.SH NEXT
+this is some example text on second section\.
+this is some example\.
+this is some example text\.
+.SH THIRD
+this is some example text\."#,
             rendered
         )
     }
