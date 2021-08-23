@@ -676,7 +676,20 @@ impl RoffNodeInner {
     }
 
     fn is_nestable(&self) -> bool {
-        !self.is_text()
+        use RoffNodeInner::*;
+        matches!(
+            self,
+            Paragraph(_)
+                | IndentedParagraph {
+                    content: _,
+                    indentation: _,
+                    title: _,
+                }
+                | TaggedParagraph {
+                    content: _,
+                    title: _,
+                }
+        )
     }
 
     fn render<W: Write>(
