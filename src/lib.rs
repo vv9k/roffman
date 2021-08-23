@@ -832,7 +832,9 @@ impl RoffNodeInner {
                 address.render(writer)?;
                 writer.write_all(ENDL)?;
                 name.render(writer)?;
-                writer.write_all(ENDL)?;
+                if !name.content.is_empty() {
+                    writer.write_all(ENDL)?;
+                }
                 writer.write_all(URL_END)?;
                 writer.write_all(ENDL)?;
                 was_text = false;
@@ -846,7 +848,9 @@ impl RoffNodeInner {
                 address.render(writer)?;
                 writer.write_all(ENDL)?;
                 name.render(writer)?;
-                writer.write_all(ENDL)?;
+                if !name.content.is_empty() {
+                    writer.write_all(ENDL)?;
+                }
                 writer.write_all(MAIL_END)?;
                 writer.write_all(ENDL)?;
                 was_text = false;
@@ -1168,7 +1172,11 @@ with \-l, scale sizes by SIZE when printing them
                 RoffNode::url("GitHub", "https://github.com/vv9k/roffman"),
                 RoffNode::url("crates.io", "https://crates.io/crates/roffman"),
                 RoffNode::url("docs.rs", "https://docs.rs/roffman"),
+                RoffNode::url("", "https://docs.rs/roffman"),
+                RoffNode::url("", ""),
                 RoffNode::email("John Test", "test@invalid.domain"),
+                RoffNode::email("", "test@invalid.domain"),
+                RoffNode::email("", ""),
             ],
         );
 
@@ -1185,8 +1193,16 @@ crates\.io
 .UR https://docs\.rs/roffman
 docs\.rs
 .UE
+.UR https://docs\.rs/roffman
+.UE
+.UR 
+.UE
 .MT test@invalid\.domain
 John Test
+.ME
+.MT test@invalid\.domain
+.ME
+.MT 
 .ME
 "#,
             rendered
