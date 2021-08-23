@@ -149,6 +149,7 @@ const LEFT_QUOTE: &[u8] = b"\\*(lq";
 const RIGHT_QUOTE: &[u8] = b"\\*(rq";
 const REGISTERED_SIGN: &[u8] = b"\\*R";
 const TRADEMARK_SIGN: &[u8] = b"\\*(Tm";
+const BREAK: &[u8] = b".br";
 
 #[derive(Debug)]
 /// An error type returned by the functions used in this crate.
@@ -607,6 +608,12 @@ impl RoffNode {
             nodes.into_iter().map(R::into_roff).collect(),
         ))
     }
+
+    /// Breaks the line in text. Use this instead of adding raw `\n` characters to actually render
+    /// linebreaks.
+    pub fn linebreak() -> Self {
+        Self(RoffNodeInner::Break)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -683,6 +690,7 @@ enum RoffNodeInner {
     RightQuote,
     TrademarkSign,
     Nested(Vec<RoffNode>),
+    Break,
 }
 
 impl RoffNodeInner {
@@ -864,6 +872,11 @@ impl RoffNodeInner {
                 writer.write_all(NESTED_END)?;
                 writer.write_all(ENDL)?;
                 was_text = false;
+            }
+            RoffNodeInner::Break => {
+                writer.write_all(ENDL)?;
+                writer.write_all(BREAK)?;
+                writer.write_all(ENDL)?;
             }
         }
 
@@ -1230,6 +1243,32 @@ this is some example text\.
 .SH THIRD
 this is some example text\."#,
             rendered
+        )
+    }
+
+    #[test]
+    fn breaks_line() {
+        let roff = Roff::new("test-breaks", SectionNumber::Miscellaneous).section(
+            "BREAKS",
+            vec![
+                RoffNode::text("this is some example text."),
+                RoffNode::linebreak(),
+                RoffNode::text("this is some example text on second line."),
+                RoffNode::linebreak(),
+                RoffNode::text("this is some example text on third line."),
+            ],
+        );
+
+        let rendered = roff.to_string().unwrap();
+        assert_eq!(
+            rendered,
+            r#".TH test\-breaks 7
+.SH BREAKS
+this is some example text\.
+.br
+this is some example text on second line\.
+.br
+this is some example text on third line\."#
         )
     }
 }
