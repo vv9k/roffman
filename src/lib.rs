@@ -395,8 +395,7 @@ impl Section {
 
         let mut was_text = false;
         for node in &self.nodes {
-            node.render(writer, false, was_text)?;
-            was_text = node.is_text();
+            was_text = node.render(writer, was_text)?;
         }
 
         Ok(was_text)
@@ -474,6 +473,11 @@ impl RoffNode {
     #[inline]
     fn into_inner(self) -> RoffNodeInner {
         self.0
+    }
+
+    #[inline]
+    fn inner_ref(&self) -> &RoffNodeInner {
+        &self.0
     }
 
     /// Creates a simple text node.
@@ -592,6 +596,17 @@ impl RoffNode {
     pub fn trademark_sign() -> Self {
         Self(RoffNodeInner::TrademarkSign)
     }
+
+    /// Nest nodes by indenting all of the nodes inside.
+    pub fn nested<I, R>(nodes: I) -> Self
+    where
+        I: IntoIterator<Item = R>,
+        R: IntoRoffNode,
+    {
+        Self(RoffNodeInner::Nested(
+            nodes.into_iter().map(R::into_roff).collect(),
+        ))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -667,41 +682,11 @@ enum RoffNodeInner {
     LeftQuote,
     RightQuote,
     TrademarkSign,
+    Nested(Vec<RoffNode>),
 }
 
 impl RoffNodeInner {
-    /// Returns `true` if the node is the [`RoffNode::Text`](RoffNode::Text) variant.
-    fn is_text(&self) -> bool {
-        matches!(self, &RoffNodeInner::Text(_))
-    }
-
-    fn is_nestable(&self) -> bool {
-        use RoffNodeInner::*;
-        matches!(
-            self,
-            Paragraph(_)
-                | IndentedParagraph {
-                    content: _,
-                    indentation: _,
-                    title: _,
-                }
-                | TaggedParagraph {
-                    content: _,
-                    title: _,
-                }
-        )
-    }
-
-    fn render<W: Write>(
-        &self,
-        writer: &mut W,
-        nested: bool,
-        was_text: bool,
-    ) -> Result<(), RoffError> {
-        // if nested {
-        //     writer.write_all(ENDL)?;
-        //     writer.write_all(NESTED_START)?;
-        // }
+    fn render<W: Write>(&self, writer: &mut W, mut was_text: bool) -> Result<bool, RoffError> {
         match self {
             RoffNodeInner::Text(text) => {
                 let styled = match text.style {
@@ -720,6 +705,7 @@ impl RoffNodeInner {
                 if styled {
                     writer.write_all(FONT_END)?;
                 }
+                was_text = true;
             }
             RoffNodeInner::Paragraph(content) => {
                 if was_text {
@@ -727,12 +713,9 @@ impl RoffNodeInner {
                 }
                 writer.write_all(PARAGRAPH)?;
                 writer.write_all(ENDL)?;
-                let mut was_text_node = false;
                 for node in content {
-                    node.render(writer, node.is_nestable(), was_text_node)?;
-                    was_text_node = node.is_text();
+                    was_text = node.render(writer, was_text)?;
                 }
-                writer.write_all(ENDL)?;
             }
             RoffNodeInner::IndentedParagraph {
                 content,
@@ -755,12 +738,11 @@ impl RoffNodeInner {
                     indentation.roff().render(writer)?;
                 }
                 writer.write_all(ENDL)?;
-                let mut was_text_node = false;
                 for node in content {
-                    node.render(writer, node.is_nestable(), was_text_node)?;
-                    was_text_node = node.is_text();
+                    was_text = node.render(writer, was_text)?;
                 }
                 writer.write_all(ENDL)?;
+                was_text = false;
             }
             RoffNodeInner::TaggedParagraph {
                 content,
@@ -774,12 +756,11 @@ impl RoffNodeInner {
                 tag.render(writer)?;
                 writer.write_all(ENDL)?;
 
-                let mut was_text_node = false;
                 for node in content {
-                    node.render(writer, node.is_nestable(), was_text_node)?;
-                    was_text_node = node.is_text();
+                    was_text = node.render(writer, was_text)?;
                 }
                 writer.write_all(ENDL)?;
+                was_text = false;
             }
             RoffNodeInner::Example(content) => {
                 if was_text {
@@ -793,6 +774,7 @@ impl RoffNodeInner {
                 writer.write_all(ENDL)?;
                 writer.write_all(EXAMPLE_END)?;
                 writer.write_all(ENDL)?;
+                was_text = false;
             }
             RoffNodeInner::Synopsis {
                 command,
@@ -831,6 +813,7 @@ impl RoffNodeInner {
                 }
                 writer.write_all(SYNOPSIS_END)?;
                 writer.write_all(ENDL)?;
+                was_text = false;
             }
             RoffNodeInner::Url { address, name } => {
                 if was_text {
@@ -844,6 +827,7 @@ impl RoffNodeInner {
                 writer.write_all(ENDL)?;
                 writer.write_all(URL_END)?;
                 writer.write_all(ENDL)?;
+                was_text = false;
             }
             RoffNodeInner::Email { address, name } => {
                 if was_text {
@@ -857,19 +841,33 @@ impl RoffNodeInner {
                 writer.write_all(ENDL)?;
                 writer.write_all(MAIL_END)?;
                 writer.write_all(ENDL)?;
+                was_text = false;
             }
             RoffNodeInner::RegisteredSign => writer.write_all(REGISTERED_SIGN)?,
             RoffNodeInner::LeftQuote => writer.write_all(LEFT_QUOTE)?,
             RoffNodeInner::RightQuote => writer.write_all(RIGHT_QUOTE)?,
             RoffNodeInner::TrademarkSign => writer.write_all(TRADEMARK_SIGN)?,
+            RoffNodeInner::Nested(nodes) => {
+                if was_text {
+                    writer.write_all(ENDL)?;
+                }
+                writer.write_all(NESTED_START)?;
+                writer.write_all(ENDL)?;
+                was_text = false;
+                for node in nodes {
+                    was_text = node.inner_ref().render(writer, was_text)?;
+                }
+
+                if was_text {
+                    writer.write_all(ENDL)?;
+                }
+                writer.write_all(NESTED_END)?;
+                writer.write_all(ENDL)?;
+                was_text = false;
+            }
         }
 
-        // if nested {
-        //     writer.write_all(ENDL)?;
-        //     writer.write_all(NESTED_END)?;
-        // }
-
-        Ok(())
+        Ok(was_text)
     }
 }
 
@@ -1023,50 +1021,49 @@ Another indented paragraph
         )
     }
 
-    //     #[test]
-    //     fn it_nests_roffs() {
-    //         let roff = Roff::new("test", SectionNumber::UserCommands).add_section(
-    //             Section::new(
-    //                 "BASE SECTION",
-    //                 vec![
-    //                     RoffNode::paragraph(vec![
-    //                         RoffNode::text("some text in first paragraph."),
-    //                         RoffNode::paragraph(vec![
-    //                             RoffNode::text("some nested paragraph"),
-    //                             RoffNode::paragraph(vec![RoffNode::text(
-    //                                 "some doubly nested paragraph",
-    //                             )]),
-    //                         ]),
-    //                     ]),
-    //                     RoffNode::paragraph(vec!["back two levels left", " without roffs"]),
-    //                 ],
-    //             )
-    //             .subtitle("with some subtitle..."),
-    //         );
-    //
-    //         let rendered = roff.to_string().unwrap();
-    //         assert_eq!(
-    //             r#".TH test 1
-    // .SH "BASE SECTION"
-    // .SS "with some subtitle\.\.\."
-    // .P
-    // some text in first paragraph\.
-    // .RS
-    // .P
-    // some nested paragraph
-    // .RS
-    // .P
-    // some doubly nested paragraph
-    //
-    // .RE
-    //
-    // .RE
-    // .P
-    // back two levels left without roffs
-    // "#,
-    //             rendered
-    //         )
-    //     }
+    #[test]
+    fn it_nests_roffs() {
+        let roff = Roff::new("test", SectionNumber::UserCommands).add_section(
+            Section::new(
+                "BASE SECTION",
+                [
+                    RoffNode::paragraph([
+                        RoffNode::text("some text in first paragraph."),
+                        RoffNode::nested([RoffNode::paragraph([
+                            RoffNode::text("some nested paragraph"),
+                            RoffNode::nested([RoffNode::paragraph([RoffNode::text(
+                                "some doubly nested paragraph",
+                            )])]),
+                            RoffNode::text("some text after nested para"),
+                        ])]),
+                    ]),
+                    RoffNode::paragraph(["back two levels left", " without roffs"]),
+                ],
+            )
+            .subtitle("with some subtitle..."),
+        );
+
+        let rendered = roff.to_string().unwrap();
+        assert_eq!(
+            rendered,
+            r#".TH test 1
+.SH "BASE SECTION"
+.SS "with some subtitle\.\.\."
+.P
+some text in first paragraph\.
+.RS
+.P
+some nested paragraph
+.RS
+.P
+some doubly nested paragraph
+.RE
+some text after nested para
+.RE
+.P
+back two levels left without roffs"#,
+        )
+    }
 
     #[test]
     fn it_roffs_examples() {
