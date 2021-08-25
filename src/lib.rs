@@ -52,11 +52,11 @@
 //! let output = r#".TH roffman 7 "August 2021"
 //! .SH "BASIC USAGE"
 //! .P
-//! This is how you create a basic paragraph using roffman\.
+//! This is how you create a basic paragraph using roffman.
 //! .IP optional\-title 4
-//! This line should be slightly indented to the \fBright\.\fR
+//! This line should be slightly indented to the \fBright.\fR
 //! .SY roffman\-command
-//! This is the description of this command\. It will be displayed right next to\fI it\fR
+//! This is the description of this command. It will be displayed right next to\fI it\fR
 //!
 //! .OP \-\-opt
 //! some simple opt
@@ -73,11 +73,11 @@
 //!
 //! impl Roffable for u8 {
 //!     fn roff(&self) \-> RoffText {
-//!         self\.to_string()\.roff()
+//!         self.to_string().roff()
 //!     }
 //! }
 //! .EE
-//! .UR https://github\.com/vv9k/roffman
+//! .UR https://github.com/vv9k/roffman
 //! GitHub
 //! .UE
 //!
@@ -184,10 +184,83 @@ impl From<io::Error> for RoffError {
     }
 }
 
+enum EscapeToken {
+    Dash,
+    LatinApostrophe,
+    OpeningQuote,
+    ClosingQuote,
+    DoubleQuote,
+    LeftDoubleQuote,
+    RightDoubleQuote,
+    GraveAccent,
+    CircumflexAccent,
+    ReverseSolidus,
+    Tilde,
+    Unescaped(char),
+}
+
+impl From<char> for EscapeToken {
+    fn from(ch: char) -> Self {
+        use EscapeToken::*;
+        match ch {
+            '-' => Dash,
+            '\'' => LatinApostrophe,
+            '‘' => OpeningQuote,
+            '’' => ClosingQuote,
+            '"' => DoubleQuote,
+            '“' => LeftDoubleQuote,
+            '”' => RightDoubleQuote,
+            '`' => GraveAccent,
+            '^' => CircumflexAccent,
+            '\\' => ReverseSolidus,
+            '~' => Tilde,
+            ch => Unescaped(ch),
+        }
+    }
+}
+
+impl EscapeToken {
+    fn escape_sequence(&self) -> &'static str {
+        use EscapeToken::*;
+        match self {
+            Dash => "\\-",
+            LatinApostrophe => "\\(aq",
+            OpeningQuote => "\\(oq",
+            ClosingQuote => "\\(cq",
+            DoubleQuote => "\\(dq",
+            LeftDoubleQuote => "\\(lq",
+            RightDoubleQuote => "\\(rq",
+            GraveAccent => "\\(ga",
+            CircumflexAccent => "\\(ha",
+            ReverseSolidus => "\\e",
+            Tilde => "\\(ti",
+            Unescaped(_) => "",
+        }
+    }
+
+    fn unescaped_char(&self) -> Option<char> {
+        if let EscapeToken::Unescaped(ch) = &self {
+            Some(*ch)
+        } else {
+            None
+        }
+    }
+}
+
 fn escape<T: AsRef<str>>(text: T) -> String {
     let text = text.as_ref();
-    let text = text.replace('.', "\\.");
-    text.replace('-', "\\-")
+    let mut out = String::new();
+    for token in text.chars().map(EscapeToken::from) {
+        if let Some(ch) = token.unescaped_char() {
+            out.push(ch);
+        } else {
+            out.push_str(token.escape_sequence());
+        }
+    }
+
+    // Escapes dots at the beginning of the line so that they don't get interpreted as
+    // roff macros.
+    out.replace("\n.", "\n\\&.")
 }
 
 fn write_quoted(roff: &RoffText, writer: &mut impl Write) -> Result<(), RoffError> {
@@ -697,22 +770,7 @@ impl RoffNodeInner {
     fn render<W: Write>(&self, writer: &mut W, mut was_text: bool) -> Result<bool, RoffError> {
         match self {
             RoffNodeInner::Text(text) => {
-                let styled = match text.style {
-                    FontStyle::Bold => {
-                        writer.write_all(BOLD)?;
-                        true
-                    }
-                    FontStyle::Italic => {
-                        writer.write_all(ITALIC)?;
-                        true
-                    }
-                    FontStyle::Roman => false,
-                };
-
-                writer.write_all(text.content.as_bytes())?;
-                if styled {
-                    writer.write_all(FONT_END)?;
-                }
+                text.render(writer)?;
                 was_text = true;
             }
             RoffNodeInner::Paragraph(content) => {
@@ -1023,7 +1081,7 @@ mod tests {
 this is some very \fBspecial\fR text
 .SH "test section 2"
 .IP "" 4
-\fILorem ipsum\fR dolor sit amet, consectetur adipiscing elit\. Vivamus quis malesuada eros\.
+\fILorem ipsum\fR dolor sit amet, consectetur adipiscing elit. Vivamus quis malesuada eros.
 .SH "test section 3"
 .TP
 \fBparagraph title\fR
@@ -1065,9 +1123,9 @@ Another indented paragraph
             rendered,
             r#".TH test 1
 .SH "BASE SECTION"
-.SS "with some subtitle\.\.\."
+.SS "with some subtitle..."
 .P
-some text in first paragraph\.
+some text in first paragraph.
 .RS
 .P
 some nested paragraph
@@ -1102,12 +1160,12 @@ back two levels left without roffs"#,
         assert_eq!(
             r#".TH test\-examples 3
 .SH "BASE SECTION"
-Lorem ipsum dolor sit amet, consectetur adipiscing elit\. Vivamus quis malesuada eros\.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus quis malesuada eros.
 .EX
 let example = String::new()
-let x = example\.clone();
-if x\.len() > 0 {
-	println!("{}", x);
+let x = example.clone();
+if x.len() > 0 {
+	println!(\(dq{}\(dq, x);
 }
 
 .EE
@@ -1118,14 +1176,16 @@ if x\.len() > 0 {
 
     #[test]
     fn it_escapes() {
-        let input = "This-is-some-text
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus quis malesuada eros.";
+        let input = r#"~/docs/$ bash -c "awk '' ``""#;
 
         assert_eq!(
             escape(input),
-            "This\\-is\\-some\\-text
-Lorem ipsum dolor sit amet, consectetur adipiscing elit\\. Vivamus quis malesuada eros\\.",
-        )
+            "\\(ti/docs/$ bash \\-c \\(dqawk \\(aq\\(aq \\(ga\\(ga\\(dq"
+        );
+
+        let dot_on_new_line = "\n.some dot on new line";
+
+        assert_eq!(escape(dot_on_new_line), "\n\\&.some dot on new line")
     }
 
     #[test]
@@ -1148,7 +1208,7 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit\\. Vivamus quis malesuad
             r#".TH test\-synopsis 7
 .SH SYNOPSIS
 .SY ls
-lists files in the given\fIpath\fR\.
+lists files in the given\fIpath\fR.
 
 .OP \-l
 use a long listing format
@@ -1184,23 +1244,23 @@ with \-l, scale sizes by SIZE when printing them
         assert_eq!(
             r#".TH test\-urls 7
 .SH URLS
-.UR https://github\.com/vv9k/roffman
+.UR https://github.com/vv9k/roffman
 GitHub
 .UE
-.UR https://crates\.io/crates/roffman
-crates\.io
+.UR https://crates.io/crates/roffman
+crates.io
 .UE
-.UR https://docs\.rs/roffman
-docs\.rs
+.UR https://docs.rs/roffman
+docs.rs
 .UE
-.UR https://docs\.rs/roffman
+.UR https://docs.rs/roffman
 .UE
 .UR 
 .UE
-.MT test@invalid\.domain
+.MT test@invalid.domain
 John Test
 .ME
-.MT test@invalid\.domain
+.MT test@invalid.domain
 .ME
 .MT 
 .ME
@@ -1228,7 +1288,7 @@ John Test
         assert_eq!(
             r#".TH test\-strings 7
 .SH STRINGS
-\*(lqthis is some example quoted text\.\*(rq \*R roffman\*(Tm"#,
+\*(lqthis is some example quoted text.\*(rq \*R roffman\*(Tm"#,
             rendered
         )
     }
@@ -1251,13 +1311,13 @@ John Test
         assert_eq!(
             r#".TH test\-sections 7
 .SH TEXTS
-this is some example text\.
+this is some example text.
 .SH NEXT
-this is some example text on second section\.
-this is some example\.
-this is some example text\.
+this is some example text on second section.
+this is some example.
+this is some example text.
 .SH THIRD
-this is some example text\."#,
+this is some example text."#,
             rendered
         )
     }
@@ -1280,11 +1340,11 @@ this is some example text\."#,
             rendered,
             r#".TH test\-breaks 7
 .SH BREAKS
-this is some example text\.
+this is some example text.
 .br
-this is some example text on second line\.
+this is some example text on second line.
 .br
-this is some example text on third line\."#
+this is some example text on third line."#
         )
     }
 }
