@@ -161,6 +161,12 @@ impl RoffNode {
     pub fn en_dash() -> Self {
         Self(RoffNodeInner::EnDash)
     }
+
+    /// Adjustable non-breaking space.  Use this to prevent a break inside a short phrase or
+    /// between a numerical quantity and its corresponding unit(s).
+    pub fn non_breaking_space() -> Self {
+        Self(RoffNodeInner::NonBreakingSpace)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -205,6 +211,7 @@ pub(crate) enum RoffNodeInner {
     Break,
     EmDash,
     EnDash,
+    NonBreakingSpace,
 }
 
 impl RoffNodeInner {
@@ -354,10 +361,6 @@ impl RoffNodeInner {
                 writer.write_all(ENDL)?;
                 was_text = false;
             }
-            RoffNodeInner::RegisteredSign => writer.write_all(REGISTERED_SIGN)?,
-            RoffNodeInner::LeftQuote => writer.write_all(LEFT_QUOTE)?,
-            RoffNodeInner::RightQuote => writer.write_all(RIGHT_QUOTE)?,
-            RoffNodeInner::TrademarkSign => writer.write_all(TRADEMARK_SIGN)?,
             RoffNodeInner::Nested(nodes) => {
                 if was_text {
                     writer.write_all(ENDL)?;
@@ -381,8 +384,34 @@ impl RoffNodeInner {
                 writer.write_all(BREAK)?;
                 writer.write_all(ENDL)?;
             }
-            RoffNodeInner::EmDash => writer.write_all(EM_DASH)?,
-            RoffNodeInner::EnDash => writer.write_all(EN_DASH)?,
+            RoffNodeInner::RegisteredSign => {
+                writer.write_all(REGISTERED_SIGN)?;
+                was_text = true;
+            }
+            RoffNodeInner::LeftQuote => {
+                writer.write_all(LEFT_QUOTE)?;
+                was_text = true;
+            }
+            RoffNodeInner::RightQuote => {
+                writer.write_all(RIGHT_QUOTE)?;
+                was_text = true;
+            }
+            RoffNodeInner::TrademarkSign => {
+                writer.write_all(TRADEMARK_SIGN)?;
+                was_text = true;
+            }
+            RoffNodeInner::EmDash => {
+                writer.write_all(EM_DASH)?;
+                was_text = true;
+            }
+            RoffNodeInner::EnDash => {
+                writer.write_all(EN_DASH)?;
+                was_text = true;
+            }
+            RoffNodeInner::NonBreakingSpace => {
+                writer.write_all(NON_BREAKING_SPACE)?;
+                was_text = true;
+            }
         }
 
         Ok(was_text)

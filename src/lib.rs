@@ -164,6 +164,7 @@ mod _macro {
     pub(crate) const BREAK: &[u8] = b".br";
     pub(crate) const EM_DASH: &[u8] = b"\\(em";
     pub(crate) const EN_DASH: &[u8] = b"\\(en";
+    pub(crate) const NON_BREAKING_SPACE: &[u8] = b"\\~";
 }
 use _macro::{ENDL, QUOTE, SPACE, TITLE_HEADER};
 
@@ -717,6 +718,13 @@ John Test
                 RoffNode::text("interupted sentence in the middle"),
                 RoffNode::em_dash(),
                 RoffNode::text("more text..."),
+                RoffNode::linebreak(),
+                RoffNode::text("64"),
+                RoffNode::non_breaking_space(),
+                RoffNode::text("KiB"),
+                RoffNode::linebreak(),
+                RoffNode::en_dash(),
+                RoffNode::paragraph(["paragraph after special sequence"]),
             ],
         );
 
@@ -728,7 +736,13 @@ John Test
 .br
 123\(en321
 .br
-some text\(eminterupted sentence in the middle\(emmore text..."#,
+some text\(eminterupted sentence in the middle\(emmore text...
+.br
+64\~KiB
+.br
+\(en
+.P
+paragraph after special sequence"#,
             rendered
         )
     }
