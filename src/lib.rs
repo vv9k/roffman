@@ -118,40 +118,52 @@
 //! ```
 
 mod escape;
+mod node;
+mod section;
+mod text;
+
+pub use node::RoffNode;
+pub use section::Section;
+pub use text::{FontStyle, RoffText};
+
+use escape::escape;
 
 use std::error::Error;
 use std::fmt;
 use std::fmt::Formatter;
 use std::io::{self, Write};
 
-const SPACE: &[u8] = b" ";
-const QUOTE: &[u8] = b"\"";
-const ENDL: &[u8] = b"\n";
-const BOLD: &[u8] = b"\\fB";
-const ITALIC: &[u8] = b"\\fI";
-const FONT_END: &[u8] = b"\\fR";
-const SECTION_HEADER: &[u8] = b".SH";
-const SUB_HEADER: &[u8] = b".SS";
-const TITLE_HEADER: &[u8] = b".TH";
-const PARAGRAPH: &[u8] = b".P";
-const INDENTED_PARAGRAPH: &[u8] = b".IP";
-const TAGGED_PARAGRAPH: &[u8] = b".TP";
-const NESTED_START: &[u8] = b".RS";
-const NESTED_END: &[u8] = b".RE";
-const EXAMPLE_START: &[u8] = b".EX";
-const EXAMPLE_END: &[u8] = b".EE";
-const SYNOPSIS_START: &[u8] = b".SY";
-const SYNOPSIS_END: &[u8] = b".YS";
-const SYNOPSIS_OPT: &[u8] = b".OP";
-const URL_START: &[u8] = b".UR";
-const URL_END: &[u8] = b".UE";
-const MAIL_START: &[u8] = b".MT";
-const MAIL_END: &[u8] = b".ME";
-const LEFT_QUOTE: &[u8] = b"\\*(lq";
-const RIGHT_QUOTE: &[u8] = b"\\*(rq";
-const REGISTERED_SIGN: &[u8] = b"\\*R";
-const TRADEMARK_SIGN: &[u8] = b"\\*(Tm";
-const BREAK: &[u8] = b".br";
+mod _macro {
+    pub(crate) const SPACE: &[u8] = b" ";
+    pub(crate) const QUOTE: &[u8] = b"\"";
+    pub(crate) const ENDL: &[u8] = b"\n";
+    pub(crate) const BOLD: &[u8] = b"\\fB";
+    pub(crate) const ITALIC: &[u8] = b"\\fI";
+    pub(crate) const FONT_END: &[u8] = b"\\fR";
+    pub(crate) const SECTION_HEADER: &[u8] = b".SH";
+    pub(crate) const SUB_HEADER: &[u8] = b".SS";
+    pub(crate) const TITLE_HEADER: &[u8] = b".TH";
+    pub(crate) const PARAGRAPH: &[u8] = b".P";
+    pub(crate) const INDENTED_PARAGRAPH: &[u8] = b".IP";
+    pub(crate) const TAGGED_PARAGRAPH: &[u8] = b".TP";
+    pub(crate) const NESTED_START: &[u8] = b".RS";
+    pub(crate) const NESTED_END: &[u8] = b".RE";
+    pub(crate) const EXAMPLE_START: &[u8] = b".EX";
+    pub(crate) const EXAMPLE_END: &[u8] = b".EE";
+    pub(crate) const SYNOPSIS_START: &[u8] = b".SY";
+    pub(crate) const SYNOPSIS_END: &[u8] = b".YS";
+    pub(crate) const SYNOPSIS_OPT: &[u8] = b".OP";
+    pub(crate) const URL_START: &[u8] = b".UR";
+    pub(crate) const URL_END: &[u8] = b".UE";
+    pub(crate) const MAIL_START: &[u8] = b".MT";
+    pub(crate) const MAIL_END: &[u8] = b".ME";
+    pub(crate) const LEFT_QUOTE: &[u8] = b"\\*(lq";
+    pub(crate) const RIGHT_QUOTE: &[u8] = b"\\*(rq";
+    pub(crate) const REGISTERED_SIGN: &[u8] = b"\\*R";
+    pub(crate) const TRADEMARK_SIGN: &[u8] = b"\\*(Tm";
+    pub(crate) const BREAK: &[u8] = b".br";
+}
+use _macro::{ENDL, QUOTE, SPACE, TITLE_HEADER};
 
 #[derive(Debug)]
 /// An error type returned by the functions used in this crate.
@@ -194,7 +206,12 @@ fn write_quoted(roff: &RoffText, writer: &mut impl Write) -> Result<(), RoffErro
 }
 
 fn write_quoted_if_whitespace(roff: &RoffText, writer: &mut impl Write) -> Result<(), RoffError> {
-    if roff.content.as_bytes().iter().any(u8::is_ascii_whitespace) {
+    if roff
+        .content()
+        .as_bytes()
+        .iter()
+        .any(u8::is_ascii_whitespace)
+    {
         write_quoted(roff, writer)
     } else {
         roff.render(writer)
@@ -345,274 +362,6 @@ impl Roffable for SectionNumber {
 }
 
 #[derive(Clone, Debug)]
-/// A single section of the ROFF document.
-pub struct Section {
-    title: RoffText,
-    subtitle: Option<RoffText>,
-    nodes: Vec<RoffNodeInner>,
-}
-
-impl Section {
-    /// Create a new section with `title` and `content`.
-    pub fn new<I, R>(title: impl Roffable, content: I) -> Self
-    where
-        I: IntoIterator<Item = R>,
-        R: IntoRoffNode,
-    {
-        Self {
-            title: title.roff(),
-            subtitle: None,
-            nodes: content
-                .into_iter()
-                .map(|r| r.into_roff().into_inner())
-                .collect(),
-        }
-    }
-
-    /// Set the sub heading of this section.
-    pub fn subtitle(mut self, subtitle: impl Roffable) -> Self {
-        self.subtitle = Some(subtitle.roff());
-        self
-    }
-
-    fn render<W: Write>(&self, writer: &mut W, was_text: bool) -> Result<bool, RoffError> {
-        if was_text {
-            writer.write_all(ENDL)?;
-        }
-        writer.write_all(SECTION_HEADER)?;
-        writer.write_all(SPACE)?;
-        write_quoted_if_whitespace(&self.title, writer)?;
-        writer.write_all(ENDL)?;
-        if let Some(subtitle) = &self.subtitle {
-            writer.write_all(SUB_HEADER)?;
-            writer.write_all(SPACE)?;
-            write_quoted_if_whitespace(subtitle, writer)?;
-            writer.write_all(ENDL)?;
-        }
-
-        let mut was_text = false;
-        for node in &self.nodes {
-            was_text = node.render(writer, was_text)?;
-        }
-
-        Ok(was_text)
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-/// Style that can be applied to [`RoffText`](RoffText)
-pub enum FontStyle {
-    Bold,
-    Italic,
-    Roman,
-}
-
-impl Default for FontStyle {
-    fn default() -> Self {
-        FontStyle::Roman
-    }
-}
-
-#[derive(Clone, Debug, Default, PartialEq)]
-/// Wrapper type for styled text in ROFF.
-pub struct RoffText {
-    content: String,
-    style: FontStyle,
-}
-
-impl RoffText {
-    pub fn new<C: AsRef<str>>(content: C, style: Option<FontStyle>) -> Self {
-        Self {
-            content: escape(content),
-            style: style.unwrap_or_default(),
-        }
-    }
-
-    /// Set the style of this text to bold.
-    pub fn bold(mut self) -> Self {
-        self.style = FontStyle::Bold;
-        self
-    }
-
-    /// Set the style of this text to italic.
-    pub fn italic(mut self) -> Self {
-        self.style = FontStyle::Italic;
-        self
-    }
-
-    fn render<W: Write>(&self, writer: &mut W) -> Result<(), RoffError> {
-        let styled = match self.style {
-            FontStyle::Bold => {
-                writer.write_all(BOLD)?;
-                true
-            }
-            FontStyle::Italic => {
-                writer.write_all(ITALIC)?;
-                true
-            }
-            FontStyle::Roman => false,
-        };
-
-        writer.write_all(self.content.as_bytes())?;
-        if styled {
-            writer.write_all(FONT_END)?;
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug)]
-/// Base struct used to create ROFFs.
-pub struct RoffNode(RoffNodeInner);
-
-impl RoffNode {
-    #[inline]
-    fn into_inner(self) -> RoffNodeInner {
-        self.0
-    }
-
-    #[inline]
-    fn inner_ref(&self) -> &RoffNodeInner {
-        &self.0
-    }
-
-    /// Creates a simple text node.
-    pub fn text(content: impl Roffable) -> Self {
-        Self(RoffNodeInner::Text(content.roff()))
-    }
-
-    /// Creates a new paragraph node.
-    pub fn paragraph<I, R>(content: I) -> Self
-    where
-        I: IntoIterator<Item = R>,
-        R: IntoRoffNode,
-    {
-        Self(RoffNodeInner::Paragraph(
-            content
-                .into_iter()
-                .map(|item| item.into_roff().into_inner())
-                .collect(),
-        ))
-    }
-
-    /// Creates a new indented paragraph node.
-    pub fn indented_paragraph<I, R>(
-        content: I,
-        indentation: Option<u8>,
-        title: Option<impl Roffable>,
-    ) -> Self
-    where
-        I: IntoIterator<Item = R>,
-        R: IntoRoffNode,
-    {
-        Self(RoffNodeInner::IndentedParagraph {
-            content: content
-                .into_iter()
-                .map(|item| item.into_roff().into_inner())
-                .collect(),
-            indentation,
-            title: title.map(|t| t.roff()),
-        })
-    }
-
-    /// Creates a new paragraph node with a title.
-    pub fn tagged_paragraph<I, R>(content: I, title: impl Roffable) -> Self
-    where
-        I: IntoIterator<Item = R>,
-        R: IntoRoffNode,
-    {
-        Self(RoffNodeInner::TaggedParagraph {
-            content: content
-                .into_iter()
-                .map(|item| item.into_roff().into_inner())
-                .collect(),
-            title: title.roff(),
-        })
-    }
-
-    /// Creates a new example node. An example block usually has the font set to monospaced.
-    pub fn example<I, R>(content: I) -> Self
-    where
-        I: IntoIterator<Item = R>,
-        R: Roffable,
-    {
-        Self(RoffNodeInner::Example(
-            content.into_iter().map(|item| item.roff()).collect(),
-        ))
-    }
-
-    /// Creates a new synopsis node explaining the given `command` with `description` and `opts`.
-    pub fn synopsis<I, R, O>(command: impl Roffable, description: I, opts: O) -> Self
-    where
-        I: IntoIterator<Item = R>,
-        R: Roffable,
-        O: IntoIterator<Item = SynopsisOpt>,
-    {
-        Self(RoffNodeInner::Synopsis {
-            command: command.roff(),
-            text: description.into_iter().map(|item| item.roff()).collect(),
-            opts: opts.into_iter().collect(),
-        })
-    }
-
-    /// Creates a new URL node that will take the form of `[name](address)` where `name` is the
-    /// visible part of the URL and address is where it points to.
-    pub fn url(name: impl Roffable, address: impl Roffable) -> Self {
-        Self(RoffNodeInner::Url {
-            name: name.roff(),
-            address: address.roff(),
-        })
-    }
-
-    /// Creates a new email node that will where `address` is the email address and `name` is the
-    /// visible URL text. `address` may not be visible if the man page is being viewed as HTML.
-    pub fn email(name: impl Roffable, address: impl Roffable) -> Self {
-        Self(RoffNodeInner::Email {
-            name: name.roff(),
-            address: address.roff(),
-        })
-    }
-
-    /// Returns a node that will be rendered as a registered sign `®`.
-    pub fn registered_sign() -> Self {
-        Self(RoffNodeInner::RegisteredSign)
-    }
-
-    /// Returns a node that will be rendered as a left quote `“`.
-    pub fn left_quote() -> Self {
-        Self(RoffNodeInner::LeftQuote)
-    }
-
-    /// Returns a node that will be rendered as a right quote `”`.
-    pub fn right_quote() -> Self {
-        Self(RoffNodeInner::RightQuote)
-    }
-
-    /// Returns a node that will be rendered as a trademark sign `™`.
-    pub fn trademark_sign() -> Self {
-        Self(RoffNodeInner::TrademarkSign)
-    }
-
-    /// Nest nodes by indenting all of the nodes inside.
-    pub fn nested<I, R>(nodes: I) -> Self
-    where
-        I: IntoIterator<Item = R>,
-        R: IntoRoffNode,
-    {
-        Self(RoffNodeInner::Nested(
-            nodes.into_iter().map(R::into_roff).collect(),
-        ))
-    }
-
-    /// Breaks the line in text. Use this instead of adding raw `\n` characters to actually render
-    /// linebreaks.
-    pub fn linebreak() -> Self {
-        Self(RoffNodeInner::Break)
-    }
-}
-
-#[derive(Clone, Debug)]
 /// An option used by the [`RoffNode::synopsis`](RoffNode::synopsis) block.
 pub struct SynopsisOpt {
     name: RoffText,
@@ -647,238 +396,10 @@ impl SynopsisOpt {
     }
 }
 
-#[derive(Clone, Debug)]
-/// Base struct used to create ROFFs.
-enum RoffNodeInner {
-    /// The most basic node type, contains only text with style.
-    Text(RoffText),
-    /// A simple paragraph that can contain nested items.
-    Paragraph(Vec<RoffNodeInner>),
-    /// Indented paragraph that can contain nested items. If no indentation is provided the default
-    /// is `4`.
-    IndentedParagraph {
-        content: Vec<RoffNodeInner>,
-        indentation: Option<u8>,
-        title: Option<RoffText>,
-    },
-    /// Paragraph with a title.
-    TaggedParagraph {
-        content: Vec<RoffNodeInner>,
-        title: RoffText,
-    },
-    /// An example block where text is monospaced.
-    Example(Vec<RoffText>),
-    Synopsis {
-        command: RoffText,
-        text: Vec<RoffText>,
-        opts: Vec<SynopsisOpt>,
-    },
-    Url {
-        name: RoffText,
-        address: RoffText,
-    },
-    Email {
-        name: RoffText,
-        address: RoffText,
-    },
-    RegisteredSign,
-    LeftQuote,
-    RightQuote,
-    TrademarkSign,
-    Nested(Vec<RoffNode>),
-    Break,
-}
-
-impl RoffNodeInner {
-    fn render<W: Write>(&self, writer: &mut W, mut was_text: bool) -> Result<bool, RoffError> {
-        match self {
-            RoffNodeInner::Text(text) => {
-                text.render(writer)?;
-                was_text = true;
-            }
-            RoffNodeInner::Paragraph(content) => {
-                if was_text {
-                    writer.write_all(ENDL)?;
-                }
-                writer.write_all(PARAGRAPH)?;
-                writer.write_all(ENDL)?;
-                for node in content {
-                    was_text = node.render(writer, was_text)?;
-                }
-            }
-            RoffNodeInner::IndentedParagraph {
-                content,
-                indentation,
-                title,
-            } => {
-                if was_text {
-                    writer.write_all(ENDL)?;
-                }
-                writer.write_all(INDENTED_PARAGRAPH)?;
-                if let Some(indentation) = indentation {
-                    writer.write_all(SPACE)?;
-                    if let Some(title) = title {
-                        write_quoted_if_whitespace(title, writer)?;
-                    } else {
-                        writer.write_all(QUOTE)?;
-                        writer.write_all(QUOTE)?;
-                    }
-                    writer.write_all(SPACE)?;
-                    indentation.roff().render(writer)?;
-                }
-                writer.write_all(ENDL)?;
-                for node in content {
-                    was_text = node.render(writer, was_text)?;
-                }
-                writer.write_all(ENDL)?;
-                was_text = false;
-            }
-            RoffNodeInner::TaggedParagraph {
-                content,
-                title: tag,
-            } => {
-                if was_text {
-                    writer.write_all(ENDL)?;
-                }
-                writer.write_all(TAGGED_PARAGRAPH)?;
-                writer.write_all(ENDL)?;
-                tag.render(writer)?;
-                writer.write_all(ENDL)?;
-
-                for node in content {
-                    was_text = node.render(writer, was_text)?;
-                }
-                writer.write_all(ENDL)?;
-                was_text = false;
-            }
-            RoffNodeInner::Example(content) => {
-                if was_text {
-                    writer.write_all(ENDL)?;
-                }
-                writer.write_all(EXAMPLE_START)?;
-                writer.write_all(ENDL)?;
-                for node in content {
-                    node.render(writer)?;
-                }
-                writer.write_all(ENDL)?;
-                writer.write_all(EXAMPLE_END)?;
-                writer.write_all(ENDL)?;
-                was_text = false;
-            }
-            RoffNodeInner::Synopsis {
-                command,
-                text,
-                opts,
-            } => {
-                if was_text {
-                    writer.write_all(ENDL)?;
-                }
-                writer.write_all(SYNOPSIS_START)?;
-                writer.write_all(SPACE)?;
-                write_quoted_if_whitespace(command, writer)?;
-                writer.write_all(ENDL)?;
-                for elem in text {
-                    elem.render(writer)?;
-                }
-                if !text.is_empty() {
-                    writer.write_all(ENDL)?;
-                }
-                for op in opts {
-                    writer.write_all(ENDL)?;
-                    writer.write_all(SYNOPSIS_OPT)?;
-                    writer.write_all(SPACE)?;
-                    write_quoted_if_whitespace(&op.name, writer)?;
-                    if let Some(arg) = &op.argument {
-                        writer.write_all(SPACE)?;
-                        write_quoted_if_whitespace(arg, writer)?;
-                    }
-                    writer.write_all(ENDL)?;
-                    if let Some(description) = &op.description {
-                        for elem in description {
-                            elem.render(writer)?;
-                        }
-                    }
-                    writer.write_all(ENDL)?;
-                }
-                writer.write_all(SYNOPSIS_END)?;
-                writer.write_all(ENDL)?;
-                was_text = false;
-            }
-            RoffNodeInner::Url { address, name } => {
-                if was_text {
-                    writer.write_all(ENDL)?;
-                }
-                writer.write_all(URL_START)?;
-                writer.write_all(SPACE)?;
-                address.render(writer)?;
-                writer.write_all(ENDL)?;
-                name.render(writer)?;
-                if !name.content.is_empty() {
-                    writer.write_all(ENDL)?;
-                }
-                writer.write_all(URL_END)?;
-                writer.write_all(ENDL)?;
-                was_text = false;
-            }
-            RoffNodeInner::Email { address, name } => {
-                if was_text {
-                    writer.write_all(ENDL)?;
-                }
-                writer.write_all(MAIL_START)?;
-                writer.write_all(SPACE)?;
-                address.render(writer)?;
-                writer.write_all(ENDL)?;
-                name.render(writer)?;
-                if !name.content.is_empty() {
-                    writer.write_all(ENDL)?;
-                }
-                writer.write_all(MAIL_END)?;
-                writer.write_all(ENDL)?;
-                was_text = false;
-            }
-            RoffNodeInner::RegisteredSign => writer.write_all(REGISTERED_SIGN)?,
-            RoffNodeInner::LeftQuote => writer.write_all(LEFT_QUOTE)?,
-            RoffNodeInner::RightQuote => writer.write_all(RIGHT_QUOTE)?,
-            RoffNodeInner::TrademarkSign => writer.write_all(TRADEMARK_SIGN)?,
-            RoffNodeInner::Nested(nodes) => {
-                if was_text {
-                    writer.write_all(ENDL)?;
-                }
-                writer.write_all(NESTED_START)?;
-                writer.write_all(ENDL)?;
-                was_text = false;
-                for node in nodes {
-                    was_text = node.inner_ref().render(writer, was_text)?;
-                }
-
-                if was_text {
-                    writer.write_all(ENDL)?;
-                }
-                writer.write_all(NESTED_END)?;
-                writer.write_all(ENDL)?;
-                was_text = false;
-            }
-            RoffNodeInner::Break => {
-                writer.write_all(ENDL)?;
-                writer.write_all(BREAK)?;
-                writer.write_all(ENDL)?;
-            }
-        }
-
-        Ok(was_text)
-    }
-}
-
 /// A trait that describes items that can be turned into a [`RoffNode`](RoffNode).
 pub trait IntoRoffNode {
     /// Convert this item into a `RoffNode`.
     fn into_roff(self) -> RoffNode;
-}
-
-impl IntoRoffNode for RoffNodeInner {
-    fn into_roff(self) -> RoffNode {
-        RoffNode(self)
-    }
 }
 
 impl IntoRoffNode for RoffNode {
@@ -926,12 +447,6 @@ impl Roffable for &&str {
 impl Roffable for std::borrow::Cow<'_, str> {
     fn roff(&self) -> RoffText {
         self.as_ref().roff()
-    }
-}
-
-impl Roffable for RoffText {
-    fn roff(&self) -> RoffText {
-        self.clone()
     }
 }
 
