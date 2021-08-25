@@ -151,6 +151,16 @@ impl RoffNode {
     pub fn linebreak() -> Self {
         Self(RoffNodeInner::Break)
     }
+
+    /// A long dash `—`. Used for an interruption—such as this one—in a sentence.
+    pub fn em_dash() -> Self {
+        Self(RoffNodeInner::EmDash)
+    }
+
+    /// A long dash `–`. Used to separate the ends of a range, particularly between number like "1–9".
+    pub fn en_dash() -> Self {
+        Self(RoffNodeInner::EnDash)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -193,6 +203,8 @@ pub(crate) enum RoffNodeInner {
     TrademarkSign,
     Nested(Vec<RoffNode>),
     Break,
+    EmDash,
+    EnDash,
 }
 
 impl RoffNodeInner {
@@ -369,6 +381,8 @@ impl RoffNodeInner {
                 writer.write_all(BREAK)?;
                 writer.write_all(ENDL)?;
             }
+            RoffNodeInner::EmDash => writer.write_all(EM_DASH)?,
+            RoffNodeInner::EnDash => writer.write_all(EN_DASH)?,
         }
 
         Ok(was_text)

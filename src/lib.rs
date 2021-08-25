@@ -162,6 +162,8 @@ mod _macro {
     pub(crate) const REGISTERED_SIGN: &[u8] = b"\\*R";
     pub(crate) const TRADEMARK_SIGN: &[u8] = b"\\*(Tm";
     pub(crate) const BREAK: &[u8] = b".br";
+    pub(crate) const EM_DASH: &[u8] = b"\\(em";
+    pub(crate) const EN_DASH: &[u8] = b"\\(en";
 }
 use _macro::{ENDL, QUOTE, SPACE, TITLE_HEADER};
 
@@ -705,6 +707,16 @@ John Test
                 RoffNode::registered_sign(),
                 RoffNode::text(" roffman"),
                 RoffNode::trademark_sign(),
+                RoffNode::linebreak(),
+                RoffNode::text("123"),
+                RoffNode::en_dash(),
+                RoffNode::text("321"),
+                RoffNode::linebreak(),
+                RoffNode::text("some text"),
+                RoffNode::em_dash(),
+                RoffNode::text("interupted sentence in the middle"),
+                RoffNode::em_dash(),
+                RoffNode::text("more text..."),
             ],
         );
 
@@ -712,7 +724,11 @@ John Test
         assert_eq!(
             r#".TH test\-strings 7
 .SH STRINGS
-\*(lqthis is some example quoted text.\*(rq \*R roffman\*(Tm"#,
+\*(lqthis is some example quoted text.\*(rq \*R roffman\*(Tm
+.br
+123\(en321
+.br
+some text\(eminterupted sentence in the middle\(emmore text..."#,
             rendered
         )
     }
