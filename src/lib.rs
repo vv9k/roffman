@@ -165,6 +165,7 @@ mod _macro {
     pub(crate) const EM_DASH: &[u8] = b"\\(em";
     pub(crate) const EN_DASH: &[u8] = b"\\(en";
     pub(crate) const NON_BREAKING_SPACE: &[u8] = b"\\~";
+    pub(crate) const COMMENT: &[u8] = b"\\\"";
 }
 use _macro::{ENDL, QUOTE, SPACE, TITLE_HEADER};
 
@@ -725,6 +726,8 @@ John Test
                 RoffNode::linebreak(),
                 RoffNode::en_dash(),
                 RoffNode::paragraph(["paragraph after special sequence"]),
+                RoffNode::comment("that was interesting indeed..."),
+                RoffNode::comment("\n\nthis should have\nnewline characters replaced with spaces."),
             ],
         );
 
@@ -742,7 +745,9 @@ some text\(eminterupted sentence in the middle\(emmore text...
 .br
 \(en
 .P
-paragraph after special sequence"#,
+paragraph after special sequence\"that was interesting indeed...
+\"  this should have newline characters replaced with spaces.
+"#,
             rendered
         )
     }

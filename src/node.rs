@@ -167,6 +167,11 @@ impl RoffNode {
     pub fn non_breaking_space() -> Self {
         Self(RoffNodeInner::NonBreakingSpace)
     }
+
+    /// Adds a comment to the generated roff. All newlines in the comment will be replaced with a ` `.
+    pub fn comment<C: AsRef<str>>(comment: C) -> Self {
+        Self(RoffNodeInner::Comment(comment.as_ref().to_string()))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -212,6 +217,7 @@ pub(crate) enum RoffNodeInner {
     EmDash,
     EnDash,
     NonBreakingSpace,
+    Comment(String),
 }
 
 impl RoffNodeInner {
@@ -411,6 +417,13 @@ impl RoffNodeInner {
             RoffNodeInner::NonBreakingSpace => {
                 writer.write_all(NON_BREAKING_SPACE)?;
                 was_text = true;
+            }
+            RoffNodeInner::Comment(comment) => {
+                writer.write_all(COMMENT)?;
+                let comment = comment.replace('\n', " ");
+                writer.write_all(comment.as_bytes())?;
+                writer.write_all(ENDL)?;
+                was_text = false
             }
         }
 
