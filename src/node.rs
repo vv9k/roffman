@@ -419,10 +419,11 @@ impl RoffNodeInner {
                 was_text = true;
             }
             RoffNodeInner::Comment(comment) => {
-                writer.write_all(COMMENT)?;
-                let comment = comment.replace('\n', " ");
-                writer.write_all(comment.as_bytes())?;
-                writer.write_all(ENDL)?;
+                for line in comment.split('\n') {
+                    writer.write_all(COMMENT)?;
+                    writer.write_all(line.as_bytes())?;
+                    writer.write_all(ENDL)?;
+                }
                 was_text = false
             }
         }

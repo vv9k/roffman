@@ -727,12 +727,13 @@ John Test
                 RoffNode::en_dash(),
                 RoffNode::paragraph(["paragraph after special sequence"]),
                 RoffNode::comment("that was interesting indeed..."),
-                RoffNode::comment("\n\nthis should have\nnewline characters replaced with spaces."),
+                RoffNode::comment("this should span\nover multiple\nlines correctly."),
             ],
         );
 
         let rendered = roff.to_string().unwrap();
         assert_eq!(
+            rendered,
             r#".TH test\-strings 7
 .SH STRINGS
 \*(lqthis is some example quoted text.\*(rq \*R roffman\*(Tm
@@ -746,9 +747,10 @@ some text\(eminterupted sentence in the middle\(emmore text...
 \(en
 .P
 paragraph after special sequence\"that was interesting indeed...
-\"  this should have newline characters replaced with spaces.
-"#,
-            rendered
+\"this should span
+\"over multiple
+\"lines correctly.
+"#
         )
     }
 
