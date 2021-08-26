@@ -4,26 +4,17 @@ use crate::{write_quoted_if_whitespace, IntoRoffNode, RoffError, RoffText, Roffa
 use std::io::Write;
 
 #[derive(Clone, Debug)]
-/// Base struct used to create ROFFs.
+/// Building block of ROFF documents.
 pub struct RoffNode(RoffNodeInner);
 
 impl RoffNode {
-    #[inline]
-    pub(crate) fn into_inner(self) -> RoffNodeInner {
-        self.0
-    }
-
-    #[inline]
-    pub(crate) fn inner_ref(&self) -> &RoffNodeInner {
-        &self.0
-    }
-
     /// Creates a simple text node.
     pub fn text(content: impl Roffable) -> Self {
         Self(RoffNodeInner::Text(content.roff()))
     }
 
-    /// Creates a new paragraph node.
+    /// Creates a new paragraph. When a new paragraph is created the indentation is reset to the
+    /// default value.
     pub fn paragraph<I, R>(content: I) -> Self
     where
         I: IntoIterator<Item = R>,
@@ -37,7 +28,7 @@ impl RoffNode {
         ))
     }
 
-    /// Creates a new indented paragraph node.
+    /// Creates a new indented paragraph with an optional tag.
     pub fn indented_paragraph<I, R>(
         content: I,
         indentation: Option<u8>,
@@ -57,7 +48,7 @@ impl RoffNode {
         })
     }
 
-    /// Creates a new paragraph node with a title.
+    /// Creates a new paragraph with a leading tag and the remainder of the paragraph indented.
     pub fn tagged_paragraph<I, R>(content: I, title: impl Roffable) -> Self
     where
         I: IntoIterator<Item = R>,
@@ -72,7 +63,11 @@ impl RoffNode {
         })
     }
 
-    /// Creates a new example node. An example block usually has the font set to monospaced.
+    /// Creates a new example node. An example block usually has the font set to monospaced but that
+    /// behavior depends on the viewer used.
+    ///
+    /// This is an extension introduced in Version 9 Unix, to the original `man` package. Many systems
+    /// running AT&T or Plan 9 `troff` support them.
     pub fn example<I, R>(content: I) -> Self
     where
         I: IntoIterator<Item = R>,
@@ -84,6 +79,8 @@ impl RoffNode {
     }
 
     /// Creates a new synopsis node explaining the given `command` with `description` and `opts`.
+    ///
+    /// This is a GNU extension not defined on systems runing AT&T, Plan 9, or Solaris `troff`.
     pub fn synopsis<I, R, O>(command: impl Roffable, description: I, opts: O) -> Self
     where
         I: IntoIterator<Item = R>,
@@ -99,6 +96,8 @@ impl RoffNode {
 
     /// Creates a new URL node that will take the form of `[name](address)` where `name` is the
     /// visible part of the URL and address is where it points to.
+    ///
+    /// This is a GNU extension not defined on systems runing AT&T, Plan 9, or Solaris `troff`.
     pub fn url(name: impl Roffable, address: impl Roffable) -> Self {
         Self(RoffNodeInner::Url {
             name: name.roff(),
@@ -108,6 +107,8 @@ impl RoffNode {
 
     /// Creates a new email node that will where `address` is the email address and `name` is the
     /// visible URL text. `address` may not be visible if the man page is being viewed as HTML.
+    ///
+    /// This is a GNU extension not defined on systems runing AT&T, Plan 9, or Solaris `troff`.
     pub fn email(name: impl Roffable, address: impl Roffable) -> Self {
         Self(RoffNodeInner::Email {
             name: name.roff(),
@@ -135,7 +136,8 @@ impl RoffNode {
         Self(RoffNodeInner::TrademarkSign)
     }
 
-    /// Nest nodes by indenting all of the nodes inside.
+    /// Nest nodes by indenting all of the nodes inside. Creating a paragraph inside of this structure
+    /// won't reset the indentation past the nested indentation level.
     pub fn nested<I, R>(nodes: I) -> Self
     where
         I: IntoIterator<Item = R>,
@@ -168,9 +170,20 @@ impl RoffNode {
         Self(RoffNodeInner::NonBreakingSpace)
     }
 
-    /// Adds a comment to the generated roff. All newlines in the comment will be replaced with a ` `.
+    /// Adds a comment to the generated roff. You can add multiple lines in a single comment and
+    /// they will automatically get converted to multiple comment lines.
     pub fn comment<C: AsRef<str>>(comment: C) -> Self {
         Self(RoffNodeInner::Comment(comment.as_ref().to_string()))
+    }
+
+    #[inline]
+    pub(crate) fn into_inner(self) -> RoffNodeInner {
+        self.0
+    }
+
+    #[inline]
+    pub(crate) fn inner_ref(&self) -> &RoffNodeInner {
+        &self.0
     }
 }
 

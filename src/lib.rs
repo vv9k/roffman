@@ -157,10 +157,10 @@ mod _macro {
     pub(crate) const URL_END: &[u8] = b".UE";
     pub(crate) const MAIL_START: &[u8] = b".MT";
     pub(crate) const MAIL_END: &[u8] = b".ME";
-    pub(crate) const LEFT_QUOTE: &[u8] = b"\\*(lq";
-    pub(crate) const RIGHT_QUOTE: &[u8] = b"\\*(rq";
-    pub(crate) const REGISTERED_SIGN: &[u8] = b"\\*R";
-    pub(crate) const TRADEMARK_SIGN: &[u8] = b"\\*(Tm";
+    pub(crate) const LEFT_QUOTE: &[u8] = b"\\(lq";
+    pub(crate) const RIGHT_QUOTE: &[u8] = b"\\(rq";
+    pub(crate) const REGISTERED_SIGN: &[u8] = b"\\(rg";
+    pub(crate) const TRADEMARK_SIGN: &[u8] = b"\\(tm";
     pub(crate) const BREAK: &[u8] = b".br";
     pub(crate) const EM_DASH: &[u8] = b"\\(em";
     pub(crate) const EN_DASH: &[u8] = b"\\(en";
@@ -736,7 +736,7 @@ John Test
             rendered,
             r#".TH test\-strings 7
 .SH STRINGS
-\*(lqthis is some example quoted text.\*(rq \*R roffman\*(Tm
+\(lqthis is some example quoted text.\(rq \(rg roffman\(tm
 .br
 123\(en321
 .br

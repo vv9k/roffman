@@ -4,7 +4,7 @@ use crate::{escape, RoffError, Roffable};
 use std::io::Write;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-/// Style that can be applied to [`RoffText`](RoffText)
+/// Style that can be applied to [`RoffText`](RoffText).
 pub enum FontStyle {
     Bold,
     Italic,
@@ -18,13 +18,17 @@ impl Default for FontStyle {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-/// Wrapper type for styled text in ROFF.
+/// Wrapper type for styled text in ROFF. The most basic unit of text used in the document. It can
+/// be styled with various [`FontStyle`s](FontStyle) and will escape it's contents on creation so
+/// that they are safe to render and will be correctly displayed on various viewers.
 pub struct RoffText {
     content: String,
     style: FontStyle,
 }
 
 impl RoffText {
+    /// Create a new `RoffText` with `content` and optional font `style`. The text will automatically
+    /// be escaped on initialization.
     pub fn new<C: AsRef<str>>(content: C, style: Option<FontStyle>) -> Self {
         Self {
             content: escape(content),
@@ -44,7 +48,8 @@ impl RoffText {
         self
     }
 
-    pub fn content(&self) -> &str {
+    /// Return the underlying escaped text.
+    pub(crate) fn content(&self) -> &str {
         &self.content
     }
 
