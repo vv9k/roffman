@@ -12,7 +12,7 @@ A crate to generate roff man pages.
 Add the following to the `Cargo.toml`:
 ```toml
 [dependencies]
-roffman = "0.2"
+roffman = "0.3"
 ```
 
 ## Example
@@ -74,11 +74,11 @@ Output:
 .TH roffman 7 "August 2021"
 .SH "BASIC USAGE"
 .P
-This is how you create a basic paragraph using roffman\.
+This is how you create a basic paragraph using roffman.
 .IP optional\-title 4
-This line should be slightly indented to the \fBright\.\fR
+This line should be slightly indented to the \fBright.\fR
 .SY roffman\-command
-This is the description of this command\. It will be displayed right next to \fIit\fR
+This is the description of this command. It will be displayed right next to\fI it\fR
 
 .OP \-\-opt
 some simple opt
@@ -95,11 +95,11 @@ opt with an argument
 
 impl Roffable for u8 {
     fn roff(&self) \-> RoffText {
-        self\.to_string()\.roff()
+        self.to_string().roff()
     }
 }
 .EE
-.UR https://github\.com/vv9k/roffman
+.UR https://github.com/vv9k/roffman
 GitHub
 .UE
 
