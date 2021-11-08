@@ -1,6 +1,6 @@
 [package]
 name = "roffman"
-version = "0.3.0"
+version = "0.4.0"
 description = "Crate to generate ROFF files used for manual pages."
 edition = "2018"
 authors = ["Wojciech Kępka <wojciech@wkepka.dev>"]
